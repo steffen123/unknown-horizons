@@ -81,6 +81,7 @@ class ResourceOverviewBar(object):
 		self.current_instance = weakref.ref(self) # can't weakref to None
 		self.construction_mode = False
 		self._last_build_costs = None
+		self._show_dummy_slot = False
 
 	def save(self, db):
 		for obj, config in self.resource_configurations.iteritems():
@@ -134,7 +135,9 @@ class ResourceOverviewBar(object):
 		initial_offset = 93
 		offset = 52
 		resources = self._get_current_resources()
-		for i, res in enumerate( resources + [-1] ): # add dummy at end for adding stuff
+		# add dummy at end for adding stuff
+		resources_show = resources + ([-1] if self._show_dummy_slot else [])
+		for i, res in enumerate( resources_show  ):
 			entry = load_uh_widget(self.ENTRY_GUI_FILE, style=self.__class__.STYLE)
 			entry.findChild(name="entry").position = (initial_offset + offset * i, 17)
 			background_icon = entry.findChild(name="background_icon")
@@ -160,6 +163,7 @@ class ResourceOverviewBar(object):
 		@param resource_source_instance: object with StorageComponent
 		@param build_costs: dict, { res : amount }
 		"""
+		print 'set const'
 		if self.construction_mode and \
 		   resource_source_instance == self.current_instance() and \
 		   build_costs == self._last_build_costs:
@@ -204,6 +208,7 @@ class ResourceOverviewBar(object):
 		self.construction_mode = False
 		if update_slots:
 			self.set_inventory_instance(None)
+		# load new gui, set value, show it, set again to please pychan
 		self._reset_gold_gui()
 		self._update_gold()
 		self.gold_gui.show()
@@ -265,7 +270,12 @@ class ResourceOverviewBar(object):
 
 	def _show_resource_selection_dialog(self, slot_num):
 		"""Shows gui for selecting a resource for slot slot_num"""
+		print 'show dlg'
 		self._hide_resource_selection_dialog()
+
+		if not self._show_dummy_slot:
+			self._show_dummy_slot = True
+			self.set_inventory_instance(self.current_instance(), force_update=True)
 
 		inv = self._get_current_inventory()
 		on_click = functools.partial(self._set_resource_slot, slot_num)
@@ -304,9 +314,21 @@ class ResourceOverviewBar(object):
 		self.set_inventory_instance(self.current_instance(), force_update=True)
 
 	def _hide_resource_selection_dialog(self):
+		print 'hide res'
 		if hasattr(self, "_res_selection_dialog"):
+			print 'ici'
+			print self._res_selection_dialog
 			self._res_selection_dialog.hide()
+			print 'dela'
 			del self._res_selection_dialog
+			print 'delb'
+		if self._show_dummy_slot:
+			self._show_dummy_slot = False
+			print 'show dum'
+			self.set_inventory_instance(self.current_instance(), force_update=True)
+		print 'done, maybe crashing now'
+
+
 
 
 	##
