@@ -51,8 +51,7 @@ def mock_fife_and_gui():
 
 		def find_module(self, fullname, path=None):
 			if fullname.startswith('fife') or \
-			   fullname.startswith('horizons.gui') or \
-			   fullname.startswith('enet'):
+			   fullname.startswith('horizons.gui'):
 				return self
 
 			return None
