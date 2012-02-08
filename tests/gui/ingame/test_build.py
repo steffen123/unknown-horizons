@@ -22,7 +22,7 @@
 from horizons.command.unit import Act
 from horizons.gui.mousetools.buildingtool import BuildingTool 
 from horizons.gui.mousetools.cursortool import CursorTool
-from tests.gui import TestFinished, gui_test
+from tests.gui import gui_test
 from tests.gui.helper import get_player_ship
 
 
@@ -31,8 +31,6 @@ def test_found_settlement(gui):
 	"""
 	Found a settlement.
 	"""
-	yield # test needs to be a generator for now
-
 	player = gui.session.world.player
 	target = (68, 10)
 	gui.session.view.center(*target)
@@ -44,7 +42,7 @@ def test_found_settlement(gui):
 
 	# wait until ship arrives
 	while (ship.position.x, ship.position.y) != target:
-		yield
+		gui.run()
 
 	gui.select([ship])
 	gui.trigger('overview_trade_ship', 'found_settlement/action/default')
@@ -55,5 +53,3 @@ def test_found_settlement(gui):
 
 	assert isinstance(gui.cursor, CursorTool)
 	assert len(player.settlements) == 1
-
-	yield TestFinished

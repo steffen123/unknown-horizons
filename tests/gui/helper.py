@@ -26,6 +26,7 @@ Cleaner interface to various game/gui functions to make tests easier.
 import contextlib
 from collections import deque
 
+import gevent
 import mock
 
 import horizons.main
@@ -173,9 +174,7 @@ class GuiHelper(object):
 	@contextlib.contextmanager
 	def handler(self, func):
 		"""Temporarily install another gui handler, e.g. to handle a dialog."""
-		self._runner._gui_handlers.append(func())
-		yield
-		self._runner._gui_handlers.pop()
+		raise NotImplementedError
 
 	def select(self, objects):
 		"""Select all objects in the given list.
@@ -251,7 +250,7 @@ class GuiHelper(object):
 		Scheduler().add_new_object(stop, None, run_in=ticks)
 
 		while Flag.running:
-			yield
+			gevent.sleep(0)	
 
 	def disable_autoscroll(self):
 		"""

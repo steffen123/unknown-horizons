@@ -36,6 +36,12 @@ except ImportError:
 	print 'The mock package is needed to run the UH tests.'
 	sys.exit(1)
 
+try:
+	import gevent
+except ImportError:
+	print 'The gevent package is needed to run the UH gui tests.'
+	sys.exit(1)
+
 
 from horizons.ext.dummy import Dummy
 

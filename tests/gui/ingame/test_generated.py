@@ -20,7 +20,7 @@
 # ###################################################
 
 
-from tests.gui import gui_test, TestFinished
+from tests.gui import gui_test
 from tests.gui.helper import get_player_ship
 
 
@@ -29,8 +29,6 @@ def test_build_a_settlement(gui):
 	"""
 	Build a settlement. Generated with gui logger.
 	"""
-	yield # test needs to be a generator for now
-
 	ship = get_player_ship(gui.session)
 
 	gui.select([ship])
@@ -40,7 +38,7 @@ def test_build_a_settlement(gui):
 
 	# Wait for ship to arrive
 	while (ship.position.x, ship.position.y) != (57, 0):
-		yield
+		gui.run()
 
 	gui.trigger('overview_trade_ship', 'found_settlement/action/default')
 
@@ -102,5 +100,3 @@ def test_build_a_settlement(gui):
 	# Build a tent
 	gui.trigger('tab', 'button_1/action/default')
 	gui.cursor_click(58, 5, 'left')
-
-	yield TestFinished

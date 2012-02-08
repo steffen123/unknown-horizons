@@ -33,18 +33,10 @@ dotted path to the test (along with other options), similar to this code:
 			assert False
 
 	def minimap(gui):
-		yield
 		menu = gui.find(name='mainmenu')
-		yield TestFinished
 
 When the game is run with --gui-test, an instance of `TestRunner` will load
-the test and install a callback function in the engine's mainloop. Each call
-the test will be further exhausted:
-
-	def callback():
-		value = minimap.next()
-		if value == TestFinished:
-			# Test ends
+the test and install a callback function in the engine's mainloop.
 """
 
 import os
@@ -55,6 +47,7 @@ import sys
 import tempfile
 from functools import wraps
 
+import gevent
 from nose.plugins import Plugin
 
 from tests import RANDOM_SEED
@@ -71,12 +64,6 @@ except ImportError:
 
 # path where test savegames are stored (tests/gui/ingame/fixtures/)
 TEST_FIXTURES_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'ingame', 'fixtures')
-
-
-# Used by the test to signal that's it's finished.
-# Needed to distinguish between the original test and other generators used
-# for dialogs.
-TestFinished = 'finished'
 
 class TestFailed(Exception): pass
 
@@ -167,9 +154,17 @@ class TestRunner(object):
 
 		self._filter_traceback()
 		test = self._load_test(test_path)
-		test_gen = test(GuiHelper(self._engine.pychan, self))
-		self._gui_handlers.append(test_gen)
+		testlet = gevent.spawn(test, GuiHelper(self._engine.pychan, self))
+		testlet.link(self._stop_test)
 		self._start()
+
+	def _stop_test(self, greenlet):
+		"""Stop the test when the return value is different from None.
+
+		To let the game running, return something else from the test function.
+		"""
+		if greenlet.value is None:
+			self._stop()
 
 	def _filter_traceback(self):
 		"""Remove test internals from exception tracebacks.
@@ -213,18 +208,7 @@ class TestRunner(object):
 
 		This function will be called by the engine's mainloop each frame.
 		"""
-		try:
-			# continue execution of current gui handler
-			value = self._gui_handlers[-1].next()
-			if value == TestFinished:
-				self._stop()
-		except StopIteration:
-			# if we end up here, it means that either
-			#   - a dialog handler has finished its execution (all fine) or
-			#   - the test has finished without signaling it (this might be on purpose)
-			#
-			# TODO issue a warning if this was the test itself
-			pass
+		gevent.sleep(0)
 
 
 def gui_test(use_dev_map=False, use_fixture=None, ai_players=0, timeout=15 * 60):

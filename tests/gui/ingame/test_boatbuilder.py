@@ -26,7 +26,7 @@ import horizons.main
 
 from horizons.constants import BUILDINGS, PRODUCTION
 from horizons.world.production.producer import Producer
-from tests.gui import TestFinished, gui_test
+from tests.gui import gui_test
 
 
 
@@ -35,8 +35,6 @@ def test_ticket_1224(gui):
 	"""
 	Boat builder running costs are inconsistent.
 	"""
-	yield # test needs to be a generator for now
-
 	settlement = gui.session.world.player.settlements[0]
 	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
 
@@ -58,12 +56,10 @@ def test_ticket_1224(gui):
 	# Wait until production starts
 	producer = boatbuilder.get_component(Producer)
 	while producer._get_current_state() != PRODUCTION.STATES.producing:
-		yield
+		gui.run()	
 
 	# Check (active) running costs
 	assert running_costs() == '25', "Expected 25, got %s" % running_costs()
-
-	yield TestFinished
 
 
 @gui_test(use_fixture='boatbuilder', timeout=120)
@@ -71,8 +67,6 @@ def test_ticket_1294(gui):
 	"""
 	Boatbuilder crash with out of order finishing.
 	"""
-	yield # test needs to be a generator for now
-
 	settlement = gui.session.world.player.settlements[0]
 	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
 
@@ -96,15 +90,13 @@ def test_ticket_1294(gui):
 	# Wait until production ends
 	producer = boatbuilder.get_component(Producer)
 	while len(producer.get_productions()) > 1:
-		yield
+		gui.run()
 
 	# Unpause huker construction
 	gui.trigger('BB_main_tab', 'toggle_active_inactive/action/default')
 
 	while len(producer.get_productions()) > 0:
-		yield
-
-	yield TestFinished
+		gui.run()
 
 
 @gui_test(use_fixture='boatbuilder', timeout=60)
@@ -112,8 +104,6 @@ def test_remove_from_queue(gui):
 	"""
 	Boatbuilder crashes when canceling a ship in the queue.
 	"""
-	yield # test needs to be a generator for now
-
 	settlement = gui.session.world.player.settlements[0]
 	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
 
@@ -134,15 +124,12 @@ def test_remove_from_queue(gui):
 	# Cancel queue -> crash
 	gui.trigger('BB_main_tab', 'queue_container/mouseClicked/default')
 
-	yield TestFinished
 
 @gui_test(use_fixture='boatbuilder', timeout=60)
 def test_cancel_ticket_1424(gui):
 	"""
 	Boatbuilder crashes when canceling a ship build.
 	"""
-	yield # test needs to be a generator for now
-
 	settlement = gui.session.world.player.settlements[0]
 	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
 
@@ -164,15 +151,11 @@ def test_cancel_ticket_1424(gui):
 	gui.trigger('BB_main_tab', 'BB_cancel_button/mouseClicked/default')
 
 
-	yield TestFinished
-
 @gui_test(use_fixture='boatbuilder', timeout=60)
 def test_save_load_ticket_1421(gui):
 	"""
 	Boatbuilder crashes when saving/loading while a ship is being produced.
 	"""
-	yield # test needs to be a generator for now
-
 	settlement = gui.session.world.player.settlements[0]
 	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
 
@@ -197,5 +180,3 @@ def test_save_load_ticket_1421(gui):
 	assert session.save(savegamename=filename)
 
 	horizons.main.load_game( savegame=filename )
-
-	yield TestFinished
