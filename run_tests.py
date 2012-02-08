@@ -47,16 +47,25 @@ def mock_fife_and_gui():
 	pychan will fail otherwise (isinstance checks that Dummy fails, metaclass
 	errors - pretty bad stuff).
 	"""
+	from horizons.network import find_enet_module
+	enet_original = find_enet_module()
+	sys.modules.setdefault('enet_original', enet_original)
+
 	class Importer(object):
 
 		def find_module(self, fullname, path=None):
 			if fullname.startswith('fife') or \
-			   fullname.startswith('horizons.gui'):
+			   fullname.startswith('horizons.gui') or \
+			   fullname.startswith('enet'):
 				return self
 
 			return None
 
 		def load_module(self, name):
+			if name == 'enet':
+				import tests.multiplayer.fake_enet
+				return tests.multiplayer.fake_enet
+
 			mod = sys.modules.setdefault(name, Dummy())
 			return mod
 

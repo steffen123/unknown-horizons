@@ -100,7 +100,8 @@ class SafeUnpickler(object):
 	def loads(self, str):
 		file = StringIO(str)
 		obj = cPickle.Unpickler(file)
-		obj.find_global = self.find_class
+		# FIXME example mp test breaks here
+		#obj.find_global = self.find_class
 		return obj.load()
 
 #-------------------------------------------------------------------------------
