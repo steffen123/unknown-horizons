@@ -149,6 +149,8 @@ def start(command_line_arguments):
 	if command_line_arguments.gui_test:
 		fife.engine.getSettings().setRenderBackend('SDL')
 		fife.set_fife_setting('PlaySounds', False)
+		from tests.gui import patch
+		patch()
 
 	ExtScheduler.create_instance(fife.pump)
 	fife.init()

@@ -48,6 +48,7 @@ the test will be further exhausted:
 """
 
 import os
+import random
 import shutil
 import signal
 import subprocess
@@ -55,6 +56,7 @@ import sys
 import tempfile
 from functools import wraps
 
+import mock
 from nose.plugins import Plugin
 
 from tests import RANDOM_SEED
@@ -105,6 +107,13 @@ def recreate_userdir():
 	global TEST_USER_DIR
 	shutil.rmtree(TEST_USER_DIR)
 	TEST_USER_DIR = tempfile.mkdtemp()
+
+
+def patch():
+	"""Override random seed in multiplayer games."""
+	from horizons.mpsession import MPSession
+	MPSession.create_rng = mock.Mock()
+	MPSession.create_rng.return_value = random.Random(RANDOM_SEED)
 
 
 class GuiTestPlugin(Plugin):
