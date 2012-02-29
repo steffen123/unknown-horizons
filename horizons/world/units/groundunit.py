@@ -87,9 +87,9 @@ class FightingGroundUnit(MovingWeaponHolder, GroundUnit):
 		#NOTE weapons
 		self.add_weapon_to_storage(WEAPONS.DAGGER)
 		self.add_weapon_to_storage(WEAPONS.CANNON)
-		names = self.session.db("SELECT name FROM groundunitnames")
+		#names = self.session.db("SELECT name FROM groundunitnames")
 		# We need unicode strings as the name is displayed on screen.
-		self.name = map(lambda x: unicode(x[0], 'utf-8'), names)
+		#self.name = map(lambda x: unicode(x[0], 'utf-8'), names)
 
 	def go(self, x, y):
 		self.get_component(SelectableComponent).go(x, y)

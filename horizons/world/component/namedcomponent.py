@@ -97,3 +97,10 @@ class SettlementNameComponent(NamedComponent):
 	def _possible_names(self):
 		names = self.session.db("SELECT name FROM citynames WHERE for_player = 1")
 		return map(lambda x: x[0], names)
+
+class GroundUnitNameComponent(NamedComponent):
+
+	def _possible_names(self):
+		names = self.session.db("SELECT name FROM groundunitnames")
+		return map(lambda x: x[0], names)
+		
