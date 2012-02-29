@@ -1,0 +1,18 @@
+baseclass: groundunit.FightingGroundUnit
+id: 1000021
+name: Bomberman
+radius: 5
+velocity: 10.0
+components:
+- SelectableComponent:
+    type: unit
+    tabs: [GroundUnitOverviewTab,]
+    enemy_tabs: [EnemyShipOverviewTab,]
+- AmbientSoundComponent
+- GroundUnitNameComponent
+- HealthComponent:
+   maxhealth: 200
+- CommandableComponent   
+
+actionsets:
+   as_groundunit0: {level: 0}
