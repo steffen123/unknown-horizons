@@ -110,15 +110,23 @@ class ResourceOverviewBar(object):
 
 	def set_inventory_instance(self, instance, keep_construction_mode=False, force_update=False):
 		"""Display different inventory. May change resources that are displayed"""
+		print  'c-1'
 		if self.current_instance() is instance and not self.construction_mode and not force_update:
 			return # caller is drunk yet again
+		print 'c0'
 		if self.construction_mode and not keep_construction_mode:
 			self.close_construction_mode(update_slots=False)
+		print 'c1'
 
 		# remove old gui
+		#import pdb; pdb.set_trace()
+		print 'gonna hie', self.gui
 		for i in self.gui:
+			print 'hide ', i
 			i.hide()
+		print 'c1.1'
 		self._hide_resource_selection_dialog()
+		print 'a'
 		self.gui = []
 
 		inv = self._get_current_inventory()
@@ -272,23 +280,29 @@ class ResourceOverviewBar(object):
 		"""Shows gui for selecting a resource for slot slot_num"""
 		print 'show dlg'
 		self._hide_resource_selection_dialog()
+		print 'b'
 
 		if not self._show_dummy_slot:
+			print 'b0'
 			self._show_dummy_slot = True
 			self.set_inventory_instance(self.current_instance(), force_update=True)
+			print 'b0.0'
 
 		inv = self._get_current_inventory()
 		on_click = functools.partial(self._set_resource_slot, slot_num)
 		cur_res = self._get_current_resources()
 		res_filter = lambda res_id : res_id not in cur_res
 		dlg = create_resource_selection_dialog(on_click, inv, self.session.db, res_filter)
+		print 'b1'
 
 		# position dlg below slot
 		cur_gui = self.gui[slot_num]
 		background_icon = cur_gui.findChild(name="background_icon")
 		dlg.position = (cur_gui.position[0] + background_icon.position[0],
 		                cur_gui.position[1] + background_icon.position[1] + background_icon.size[1] )
+		print 'b2'
 		dlg.show()
+		print 'b3'
 		self._res_selection_dialog = dlg
 
 	def _set_resource_slot(self, slot_num, res_id):
@@ -297,6 +311,7 @@ class ResourceOverviewBar(object):
 		@param res_id: a resource id or 0 for remove slot
 		"""
 		self._hide_resource_selection_dialog()
+		print 'c'
 		res_copy = self._get_current_resources()[:]
 		if slot_num < len(res_copy): # change existing slot
 			if res_id == 0: # remove it
