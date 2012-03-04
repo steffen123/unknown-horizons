@@ -7,7 +7,7 @@ components:
 - SelectableComponent:
     type: unit
     tabs: [GroundUnitOverviewTab,]
-    enemy_tabs: [EnemyShipOverviewTab,]
+    enemy_tabs: [EnemyGroundUnitOverviewTab,]
 - AmbientSoundComponent
 - GroundUnitNameComponent
 - HealthComponent:

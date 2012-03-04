@@ -590,6 +590,12 @@ class EnemyShipOverviewTab(OverviewTab):
 		)
 		self.widget.findChild(name="headline").text = unicode(self.instance.owner.name)
 
+class EnemyGroundUnitOverviewTab(OverviewTab):
+	def  __init__(self, instance):
+		super(EnemyGroundUnitOverviewTab, self).__init__(
+			widget = 'overview_enemyunit.xml',
+			instance = instance)
+
 class ResourceDepositOverviewTab(OverviewTab):
 	def  __init__(self, instance):
 		super(ResourceDepositOverviewTab, self).__init__(
