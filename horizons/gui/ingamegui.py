@@ -95,6 +95,7 @@ class IngameGui(LivingObject):
 		cityinfo.position_technique = "%s%+d:%s%+d" % (x, x_offset, y, y_offset) # usually "center-10:top+4"
 
 		self.logbook = LogBook(self.session)
+		self.message_widget = MessageWidget(self.session)
 		self.players_overview = PlayersOverview(self.session)
 		self.players_settlements = PlayersSettlements(self.session)
 		self.players_ships = PlayersShips(self.session)
@@ -110,7 +111,6 @@ class IngameGui(LivingObject):
 		                       targetrenderer=horizons.main.fife.targetrenderer,
 		                       imagemanager=horizons.main.fife.imagemanager,
 		                       session=self.session,
-		                       world=self.session.world,
 		                       view=self.session.view)
 
 		def speed_up():
@@ -136,8 +136,6 @@ class IngameGui(LivingObject):
 		#minimap.position_technique = "right+15:top+153"
 
 		self.widgets['tooltip'].hide()
-
-		self.message_widget = MessageWidget(self.session)
 
 		self.resource_overview = ResourceOverviewBar(self.session)
 		self.session.message_bus.subscribe_globally( ResourceBarResize, self._on_resourcebar_resize )

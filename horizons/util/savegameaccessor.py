@@ -19,6 +19,8 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+import hashlib
+import os.path
 from collections import defaultdict, deque
 
 from horizons.util.savegameupgrader import SavegameUpgrader
@@ -49,6 +51,7 @@ class SavegameAccessor(DbReader):
 		self._load_component()
 		self._load_storage_global_limit()
 		self._load_health()
+		self._hash = None
 
 	def close(self):
 		super(SavegameAccessor, self).close()
@@ -249,5 +252,22 @@ class SavegameAccessor(DbReader):
 	def get_health(self, owner):
 		return self._health[owner]
 
+	# Random savegamefile related utility that i didn't know where to put
+
+	@classmethod
+	def get_players_num(cls, savegamefile):
+		"""Return number of regular human and ai players"""
+		return DbReader(savegamefile)("SELECT count(rowid) FROM player WHERE is_trader = 0 AND is_pirate = 0")[0][0]
+
+	@classmethod
+	def get_hash(cls, savegamefile):
+		if not os.path.exists(savegamefile):
+			return False
+		fd = open(savegamefile, "rb")
+		h = hashlib.sha1()
+		h.update(fd.read())
+		filehash = h.hexdigest()
+		fd.close();
+		return filehash
 
 decorators.bind_all(SavegameAccessor)

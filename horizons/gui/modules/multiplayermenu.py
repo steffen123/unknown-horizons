@@ -20,7 +20,9 @@
 # ###################################################
 
 import logging
+import os.path
 import textwrap
+from fife.extensions import pychan
 
 from horizons.gui.modules import PlayerDataSelection
 from horizons.savegamemanager import SavegameManager
@@ -28,6 +30,8 @@ from horizons.network.networkinterface import MPGame
 from horizons.constants import MULTIPLAYER
 from horizons.network.networkinterface import NetworkInterface
 from horizons.network import find_enet_module
+from horizons.util import SavegameAccessor
+from horizons.world.component.ambientsoundcomponent import AmbientSoundComponent
 
 enet = find_enet_module()
 
@@ -91,7 +95,7 @@ class MultiplayerMenu(object):
 	def create_default_mp_game(self):
 		"""For debugging; creates a valid game. Call right after show_multi"""
 		self.__show_create_game()
-		self.__create_game()
+		self.__create_game(chosen_map = 'mp-dev')
 
 	def join_mp_game(self):
 		"""For debugging; joins first open game. Call right after show_multi"""
@@ -147,16 +151,14 @@ class MultiplayerMenu(object):
 		if self.games is None:
 			return False
 
-		# TODO: show only load games where we have the fitting savegame
-		# (perhaps display others greyed out for now)
-
-		self.current.distributeInitialData({'gamelist' : map(lambda x: "{name} ({players}, {limit}){version}".format(
+		self.current.distributeInitialData(
+		  {'gamelist' : map(lambda x: "{gamename}: {name} ({players}, {limit}){version}".format(
 		                        name=x.get_map_name(),
+		                        gamename=x.get_name(),
 		                        players=x.get_player_count(),
 		                        limit=x.get_player_limit(),
-		                        version=" " + _("Version differs!") if x.get_version() != NetworkInterface().get_clientversion() else ""
-						    ),
-		        self.games)})
+		                        version=" " + _("Version differs!") if x.get_version() != NetworkInterface().get_clientversion() else ""),
+		                    self.games)})
 		self.current.distributeData({'gamelist' : 0}) # select first map
 		self.__update_game_details()
 		return True
@@ -169,7 +171,7 @@ class MultiplayerMenu(object):
 				index = self.current.collectData('gamelist')
 				return self.games[index]
 		except:
-			return MPGame(-1, "", "", 0, 0, [], "", -1)
+			return MPGame(-1, "", "", 0, 0, [], "", -1, "", False)
 
 	def __show_only_own_version_toggle(self):
 		self.__refresh()
@@ -180,6 +182,7 @@ class MultiplayerMenu(object):
 			game = self.__get_selected_game()
 		#xgettext:python-format
 		self.current.findChild(name="game_map").text = _("Map: {map_name}").format(map_name=game.get_map_name())
+		self.current.findChild(name="game_name").text = _("Name: {game_name}").format(game_name=game.get_name())
 		#xgettext:python-format
 		self.current.findChild(name="game_playersnum").text =  _("Players: {player_amount}/{player_limit}").format(
 		                           player_amount=game.get_player_count(),
@@ -188,12 +191,39 @@ class MultiplayerMenu(object):
 		#xgettext:python-format
 		creator_text.text = _("Creator: {player}").format(player=game.get_creator())
 		creator_text.adaptLayout()
-		if game.load:
-			self.current.findChild(name="game_isloaded").text = u"Is a savegame"
+		vbox_inner = self.current.findChild(name="game_info")
+		if game.load is not None: # work around limitations of current systems via messages
+			path = SavegameManager.get_multiplayersave_map(game.mapname)
+			if SavegameAccessor.get_hash(path) != game.load:
+				text = ""
+				btn_name = "save_missing_help_button"
+				btn = vbox_inner.findChild(name=btn_name)
+				if btn is None:
+					btn = pychan.widgets.Button(name=btn_name,
+					                            text=_("This savegame is missing (click here)"))
+					last_elem = vbox_inner.findChild(name="game_info_last")
+					if last_elem is None: # no last elem -> we are last
+						vbox_inner.addChild( btn )
+					else:
+						vbox_inner.insertChildBefore( btn, last_elem )
+				btn_text = _(u"For multiplayer load, it is currently necessary for you to ensure you have the correct savegame file.") + u"\n"
+				btn_text += _(u"This is not nice and we hope to offer a more convenient solution very soon.") + u"\n"
+				btn_text += _(u"Meanwhile, please request the file {path} from the game creator and put it in {map_directory} .").format(path=os.path.basename(path), map_directory=os.path.dirname(path))
+				btn.btn_text = btn_text
+				def show():
+					self.show_popup(_("Help"), btn_text, size=1)
+				btn.capture(show)
+
+			else:
+				text = _(u"This is a savegame.")
+
+			if text:
+				self.current.findChild(name="game_isloaded").text = text
 		textplayers = self.current.findChild(name="game_players")
 		if textplayers is not None:
 			textplayers.text = u", ".join(game.get_players())
 
+		vbox_inner.adaptLayout() # inner vbox always exists
 		vbox = self.current.findChild(name="gamedetailsbox")
 		if vbox is not None:
 			vbox.adaptLayout()
@@ -202,7 +232,11 @@ class MultiplayerMenu(object):
 		"""Joins a multiplayer game. Displays lobby for that specific game"""
 		if game == None:
 			game = self.__get_selected_game()
+		if game.load is not None and SavegameAccessor.get_hash(SavegameManager.get_multiplayersave_map(game.mapname)) != game.load:
+			self.show_popup(_("Error"), self.current.findChild(name="save_missing_help_button").btn_text, size=1)
+			return
 		if game.get_uuid() == -1: # -1 signals no game
+			AmbientSoundComponent.play_special('error')
 			return
 		if game.get_version() != NetworkInterface().get_clientversion():
 			self.show_popup(_("Wrong version"),
@@ -326,35 +360,57 @@ class MultiplayerMenu(object):
 		  'maplist/mouseWheelMovedDown' : _update_infos
 		})
 
+		gamename_textfield = self.current.findChild(name="gamename")
+		def clear_gamename_textfield():
+			gamename_textfield.text = u""
+		gamename_textfield.capture(clear_gamename_textfield, 'mouseReleased', 'default')
+
 		self.current.show()
 
 		self.on_escape = event_map['cancel']
 
 	def __show_load_game(self):
-		path = self.show_select_savegame(mode='mp_load')
-		if path is None: # user aborted
+		ret = self.show_select_savegame(mode='mp_load')
+		if ret is None: # user aborted
 			return
+		path, gamename = ret
 		# get name from path
 		paths, names = SavegameManager.get_multiplayersaves()
-		name = names[paths.index(path)]
-		self.__create_game(load=name)
+		mapname = names[paths.index(path)]
+		self.__create_game(load=(mapname, gamename))
 
 
-	def __create_game(self, load=None):
-		"""Actually create a game, join it and display the lobby.
-		@param load: set to the savegame name on load"""
+	def __create_game(self, load=None, chosen_map=None):
+		"""
+		Actually create a game, join it, and display the lobby.
+		
+		@param load: game data tuple for creating loaded games
+		@param chosen_map: the name of the map to start a new game on (overrides the gui)
+		"""
 		# create the game
-		#TODO: possibly some input validation
 		if load:
-			mapname = load
-			maxplayers = 2 # TODO: read from savegame
+			mapname, gamename = load
+			path = SavegameManager.get_multiplayersave_map(mapname)
+			maxplayers = SavegameAccessor.get_players_num(path)
+			load = SavegameAccessor.get_hash(path)
 		else:
-			mapindex = self.current.collectData('maplist')
+			mapindex = None
+			if chosen_map is not None:
+				for i, map in enumerate(self.maps_display):
+					if map == chosen_map:
+						mapindex = i
+						break
+
+			if mapindex is None:
+				mapindex = self.current.collectData('maplist')
 			mapname = self.maps_display[mapindex]
 			maxplayers = self.current.collectData('playerlimit') + 2 # 1 is the first entry
+			gamename = self.current.collectData('gamename')
+			load = None
 
-		game = NetworkInterface().creategame(mapname, maxplayers, load)
+		game = NetworkInterface().creategame(mapname, maxplayers, gamename, load)
 		if game is None:
 			return
 
 		self.__show_gamelobby()
+

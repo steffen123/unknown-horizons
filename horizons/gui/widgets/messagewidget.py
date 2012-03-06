@@ -20,6 +20,7 @@
 # ###################################################
 
 import textwrap
+import itertools
 
 from fife.extensions import pychan
 
@@ -49,11 +50,16 @@ class MessageWidget(LivingObject):
 	_DUPLICATE_TIME_THRESHOLD = 10 # sec
 	_DUPLICATE_SPACE_THRESHOLD = 8 # distance
 
+	OVERVIEW_WIDGET = 'messagewidget_overview.xml'
+
 	def __init__(self, session):
 		super(MessageWidget, self).__init__()
 		self.session = session
 		self.active_messages = [] # for displayed messages
 		self.archive = [] # messages, that aren't displayed any more
+		self.chat = [] # chat messages sent by players
+		self.msgcount = itertools.count() # sort to preserve order after loading
+
 		self.widget = load_uh_widget(self.ICON_TEMPLATE)
 		self.widget.position = (
 			 5,
@@ -62,7 +68,6 @@ class MessageWidget(LivingObject):
 		self.text_widget = load_uh_widget(self.MSG_TEMPLATE)
 		self.text_widget.position = (self.widget.x + self.widget.width, self.widget.y)
 
-		self.current_tick = 0
 		self.widget.show()
 		self.item = 0 # number of current message
 		ExtScheduler().add_new_object(self.tick, self, loops=-1)
@@ -71,10 +76,10 @@ class MessageWidget(LivingObject):
 		self._last_message = {} # used to detect fast subsequent messages in add()
 		self.draw_widget()
 
-	def add(self, x, y, string_id, message_dict=None, sound_file=True, check_duplicate=False):
+	def add(self, x, y, string_id, message_dict=None, creation_tick=None, sound_file=True, check_duplicate=False):
 		"""Adds a message to the MessageWidget.
-		@param x, y: int coordinates where the action took place.
-		@param id: message id string, needed to retrieve the message from the database.
+		@param x, y: int coordinates where the action took place. Clicks on the message will then focus that spot.
+		@param id: message id string, needed to retrieve the message text from the content database.
 		@param message_dict: dict with strings to replace in the message, e.g. {'player': 'Arthus'}
 		@param sound_file: if True: play default message speech for string_id
 		                   if False: do not play sound
@@ -94,17 +99,28 @@ class MessageWidget(LivingObject):
 							True: get_speech_file(string_id),
 							False: None
 							}.get(sound_file, sound_file)
-		self._add_message(Message(x, y, string_id, self.current_tick, message_dict=message_dict), sound)
+		self._add_message(Message(x, y, string_id, created=self.msgcount.next(), message_dict=message_dict), sound)
 
 	def add_custom(self, x, y, messagetext, visible_for=40, icon_id=1):
-		self._add_message( Message(x, y, None, self.current_tick, display=visible_for, message=messagetext, icon_id=icon_id) )
+		""" See docstring for add().
+		Uses no predefined message template from content database like add() does.
+		Instead, directly provides text and icon to be shown (messagetext, icon_id)
+		@param visible_for: how many seconds the message will stay visible in the widget
+		"""
+		self._add_message(Message(x, y, None, display=visible_for, created=self.msgcount.next(), message=messagetext, icon_id=icon_id))
 
-	def _add_message(self, message, sound = None):
+	def add_chat(self, player, messagetext, icon_id=1):
+		""" See docstring for add().
+		"""
+		message_dict = {'player': player, 'message': messagetext}
+		self.add(x=None, y=None, string_id='CHAT', message_dict=message_dict)
+		self.chat.append(self.active_messages[0])
+
+	def _add_message(self, message, sound=None):
 		"""Internal function for adding messages. Do not call directly.
 		@param message: Message instance
 		@param sound: path to soundfile"""
 		self.active_messages.insert(0, message)
-
 		if len(self.active_messages) > self.MAX_MESSAGES:
 			self.active_messages.remove(self.active_messages[self.MAX_MESSAGES])
 
@@ -209,31 +225,41 @@ class MessageWidget(LivingObject):
 
 	def save(self, db):
 		for message in self.active_messages:
-			if message.id is not None: # only save default messages (for now)
-				db("INSERT INTO message_widget_active (id, x, y, read, created, display, message) VALUES (?, ?, ?, ?, ?, ?, ?)", message.id, message.x, message.y, 1 if message.read else 0, message.created, message.display, message.message)
+			if message.id is not None and message.id != 'CHAT': # only save default messages (for now)
+				db("INSERT INTO message_widget_active (id, x, y, read, created, display, message) VALUES (?, ?, ?, ?, ?, ?, ?)", message.id, message.x, message.y, int(message.read), message.created, message.display, message.message)
 		for message in self.archive:
-			if message.id is not None:
-				db("INSERT INTO message_widget_archive (id, x, y, read, created, display, message) VALUES (?, ?, ?, ?, ?, ?, ?)", message.id, message.x, message.y, 1 if message.read else 0, message.created, message.display, message.message)
+			if message.id is not None and message.id != 'CHAT':
+				db("INSERT INTO message_widget_archive (id, x, y, read, created, display, message) VALUES (?, ?, ?, ?, ?, ?, ?)", message.id, message.x, message.y, int(message.read), message.created, message.display, message.message)
+		for message in self.chat:
+			# handle 'CHAT' special case: display is 0 (do not show old chat on load)
+			db("INSERT INTO message_widget_archive (id, x, y, read, created, display, message) VALUES (?, ?, ?, ?, ?, ?, ?)", message.id, message.x, message.y, int(message.read), message.created, 0, message.message)
 
 	def load(self, db):
-		return # function disabled for now cause it crashes
-		for message in db("SELECT id, x, y, read, created, display, message FROM message_widget_active"):
-			self.active_messages.append(Message(x, y, id, created, bool(read), display, message))
-		for message in db("SELECT id, x, y, read, created, display, message FROM message_widget_archive"):
-			self.archive.append(Message(self.x, self.y, id, created, bool(read), display, message))
+		messages = db("SELECT id, x, y, read, created, display, message FROM message_widget_active ORDER BY created ASC")
+		for (msg_id, x, y, read, created, display, message) in messages:
+			msg = Message(x, y, msg_id, created, bool(read), bool(display), message)
+			self.active_messages.append(msg)
+		messages = db("SELECT id, x, y, read, created, display, message FROM message_widget_archive ORDER BY created ASC")
+		for (msg_id, x, y, read, created, display, message) in messages:
+			msg = Message(x, y, msg_id, created, bool(read), bool(display), message)
+			if msg_id == 'CHAT':
+				self.chat.append(msg)
+			else:
+				self.archive.append(msg)
+		count = max([-1] + [m.created for m in self.active_messages + self.archive + self.chat]) + 1
+		self.msgcount = itertools.count(count) # start keyword only works with 2.7+
 		self.draw_widget()
 
 
 class Message(object):
 	"""Represents a message that is to be displayed in the MessageWidget.
-	The message is used as a string.Template, meaning it can contain placeholders
-	like the following: $player, ${gold}. The second version is recommended, as the word
-	can then be followed by other characters without a whitespace (e.g. "home of ${player}").
-	The dict needed to fill these placeholders needs to be provided when creating the Message.
+	The message is used as a string template, meaning it can contain placeholders
+	like the following: {player}, {gold}. The dict needed to fill in these place-
+	holders needs to be provided when creating Messages. (parameter message_dict)
 
 	@param x, y: int position on the map where the action took place.
 	@param id: message id string, needed to retrieve the message from the database.
-	@param created: tickid when the message was created.
+	@param created: tickid when the message was created. Keeps message order after load.
 	@param message_dict: dict with strings to replace in the message, e.g. {'player': 'Arthus'}
 	"""
 	def __init__(self, x, y, id, created, read=False, display=None, message=None, message_dict=None, icon_id=None):
@@ -255,3 +281,6 @@ class Message(object):
 				self.message = msg
 				print u"Warning: Unsubstituted string {err} in {id} message \"{msg}\", dict {dic}".format(
 				       err=err, msg=msg, id=id, dic=message_dict)
+
+	def __repr__(self):
+		return "% 4d: %s  '%s'  %s %s%s" % (self.created, self.id, self.message, '(%s,%s) ' % (self.x, self.y) if self.x and self.y else '', 'R' if self.read else ' ', 'D' if self.display else ' ')

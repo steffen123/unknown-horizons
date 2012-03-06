@@ -46,7 +46,8 @@ import signal
 import traceback
 import platform
 
-from horizons.constants import PATHS, VERSION
+# NOTE: do NOT import anything from horizons.* into global scope
+# this will break any run_uh imports from other locations (e.g. _get_version())
 
 def log():
 	"""Returns Logger"""
@@ -81,6 +82,7 @@ def find_uh_position():
 
 def get_option_parser():
 	"""Returns inited OptionParser object"""
+	from horizons.constants import VERSION
 	p = optparse.OptionParser(usage="%prog [options]", version=VERSION.string())
 	p.add_option("-d", "--debug", dest="debug", action="store_true", \
 				       default=False, help="Enable debug output to stderr and a logfile.")
@@ -157,14 +159,15 @@ def get_option_parser():
 	                     help="Create an multiplayer game with default settings.")
 	dev_group.add_option("--join-mp-game", action="store_true", dest="join_mp_game", \
 	                     help="Join first multiplayer game.")
-	p.add_option_group(dev_group)
-	p.add_option_group(dev_group)
+	dev_group.add_option("--interactive-shell", action="store_true", dest="interactive_shell",
+	                     help="Starts an IPython kernel. Connect to the shell with: ipython console --existing")
 	p.add_option_group(dev_group)
 
 	return p
 
 def create_user_dirs():
 	"""Creates the userdir and subdirs. Includes from horizons."""
+	from horizons.constants import PATHS
 	for directory in (PATHS.USER_DIR, PATHS.LOG_DIR, PATHS.SCREENSHOT_DIR):
 		if not os.path.isdir(directory):
 			os.makedirs(directory)
@@ -247,6 +250,7 @@ def main():
 		except ImportError:
 			import profile
 
+		from horizons.constants import PATHS
 		profiling_dir = os.path.join(PATHS.USER_DIR, 'profiling')
 		if not os.path.exists(profiling_dir):
 			os.makedirs(profiling_dir)
@@ -281,6 +285,7 @@ def parse_args():
 		options.debug = True
 		# also log to file
 		# init a logfile handler with a dynamic filename
+		from horizons.constants import PATHS
 		if options.logfile:
 			logfilename = options.logfile
 		else:
@@ -306,6 +311,9 @@ def parse_args():
 				except UnicodeEncodeError:
 					# python unicode handling is weird, this has been empirically proven to work
 					logfile.write( line.encode("UTF-8") )
+			def flush(self):
+				sys.__stdout__.flush()
+				logfile.flush()
 		sys.stdout = StdOutDuplicator()
 
 		# add a handler to stderr too _but_ only if logfile isn't already a tty

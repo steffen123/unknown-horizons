@@ -131,7 +131,7 @@ class Build(Command):
 			for (resource, value) in building.costs.iteritems():
 				# remove from issuer, and remove rest from secondary source (settlement or ship)
 				first_source_remnant = issuer.get_component(StorageComponent).inventory.alter(resource, -value)
-				if secondary_resource_source is not None:
+				if first_source_remnant != 0 and secondary_resource_source is not None:
 					second_source_remnant = secondary_resource_source.get_component(StorageComponent).inventory.alter(resource, first_source_remnant)
 					assert second_source_remnant == 0
 				else: # first source must have covered everything
@@ -146,7 +146,8 @@ class Build(Command):
 			ship = WorldObject.get_object_by_id(self.ship)
 			for res, amount in [(res, amount) for res, amount in ship.get_component(StorageComponent).inventory]: # copy the inventory first because otherwise we would modify it while iterating
 				amount = min(amount, building.settlement.get_component(StorageComponent).inventory.get_free_space_for(res))
-				TransferResource(amount, res, ship, building.settlement).execute(session)
+				# execute directly, we are already in a command
+				TransferResource(amount, res, ship, building.settlement)(issuer=issuer)
 
 		# NOTE: conditions are not MP-safe! no problem as long as there are no MP-scenarios
 		session.scenario_eventhandler.schedule_check(CONDITIONS.building_num_of_type_greater)

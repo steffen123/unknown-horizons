@@ -50,7 +50,34 @@ def init_pychan():
 	for widget in widgets:
 		pychan.widgets.registerWidget(widget)
 
-	# style
+	# NOTE: there is a bug with the tuple notation: http://fife.trac.cvsdude.com/engine/ticket/656
+	# work around this here for now:
+	def conv(d):
+		entries = []
+		for k, v in d.iteritems():
+			if isinstance(v, dict): # recurse
+				v = conv(v)
+			if isinstance(k, tuple): # resolve tuple-notation, add separate keys
+				for k_i in k:
+					entries.append( (k_i, v) )
+			else:
+				entries.append( (k, v) )
+
+		for entry in entries[:]:
+			# Button is the same as Tooltip button, duplicate styles
+			if entry[0] == "Button":
+				entries.append( ("TooltipButton", entry[1]) )
+
+		return dict(entries)
+
+	global STYLES
+	# patch uh styles
+	STYLES = conv(STYLES)
+
+	# patch fife default styles
+	pychan.manager.styles = conv(pychan.manager.styles)
+
+	# add uh styles
 	for name, stylepart in STYLES.iteritems():
 		pychan.manager.addStyle(name, stylepart)
 

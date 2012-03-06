@@ -20,9 +20,17 @@
 # ###################################################
 
 from horizons.network.packets import *
+from horizons.network import NetworkException
 
 class cmd_creategame(packet):
-	def __init__(self, clientver, mapname, maxplayers, playername, load=False):
+	clientversion = None
+	mapname       = None
+	maxplayers    = None
+	playername    = None
+	name          = u"Unnamed Game"
+	load          = None
+
+	def __init__(self, clientver, mapname, maxplayers, playername, name, load=None):
 		"""
 		@param load: whether it's a loaded game
 		"""
@@ -30,27 +38,66 @@ class cmd_creategame(packet):
 		self.mapname       = mapname
 		self.maxplayers    = maxplayers
 		self.playername    = playername
+		self.name          = name
 		self.load          = load
+
+	def validate(self):
+		if not isinstance(self.clientversion, unicode):
+			raise NetworkException("Invalid datatype: clientversion")
+		if not isinstance(self.mapname, unicode):
+			raise NetworkException("Invalid datatype: mapname")
+		if not isinstance(self.maxplayers, int):
+			raise NetworkException("Invalid datatype: maxplayers")
+		if not isinstance(self.playername, unicode):
+			raise NetworkException("Invalid datatype: playername")
+		if not isinstance(self.name, unicode):
+			raise NetworkException("Invalid datatype: name")
+		if self.load is not None and not isinstance(self.load, str):
+			raise NetworkException("Invalid datatype: load")
 
 SafeUnpickler.add('client', cmd_creategame)
 
 #-------------------------------------------------------------------------------
 
 class cmd_listgames(packet):
+	clientversion = 0
+	mapname       = None
+	maxplayers    = None
+
 	def __init__(self, clientver, mapname = None, maxplayers = None):
 		self.clientversion = clientver
 		self.mapname       = mapname
 		self.maxplayers    = maxplayers
+
+	def validate(self):
+		if not isinstance(self.clientversion, (int, unicode)):
+			raise NetworkException("Invalid datatype: clientversion")
+		if self.mapname is not None and not isinstance(self.mapname, unicode):
+			raise NetworkException("Invalid datatype: mapname")
+		if self.maxplayers is not None and not isinstance(self.maxplayers, int):
+			raise NetworkException("Invalid datatype: maxplayers")
 
 SafeUnpickler.add('client', cmd_listgames)
 
 #-------------------------------------------------------------------------------
 
 class cmd_joingame(packet):
+	uuid          = None
+	clientversion = None
+	playername    = None
+
 	def __init__(self, uuid, clientver, playername):
-		self.uuid = uuid
+		self.uuid          = uuid
 		self.clientversion = clientver
 		self.playername    = playername
+
+	def validate(self):
+		if not isinstance(self.uuid, str):
+			raise NetworkException("Invalid datatype: uuid")
+		if not isinstance(self.clientversion, unicode):
+			raise NetworkException("Invalid datatype: clientversion")
+		if not isinstance(self.playername, unicode):
+			raise NetworkException("Invalid datatype: playername")
 
 SafeUnpickler.add('client', cmd_joingame)
 
@@ -65,16 +112,28 @@ SafeUnpickler.add('client', cmd_leavegame)
 #-------------------------------------------------------------------------------
 
 class cmd_chatmsg(packet):
+	chatmsg = None
+
 	def __init__(self, msg):
 		self.chatmsg = msg
+
+	def validate(self):
+		if not isinstance(self.chatmsg, unicode):
+			raise NetworkException("Invalid datatype: chatmsg")
 
 SafeUnpickler.add('client', cmd_chatmsg)
 
 #-------------------------------------------------------------------------------
 
 class cmd_changename(packet):
+	playername = None
+
 	def __init__(self, playername):
 		self.playername = playername
+
+	def validate(self):
+		if not isinstance(self.playername, unicode):
+			raise NetworkException("Invalid datatype: playername")
 
 SafeUnpickler.add('client', cmd_changename)
 

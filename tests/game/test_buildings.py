@@ -164,7 +164,7 @@ def test_build_tear(s, p):
 	s.run(seconds=1)
 
 	wid = tree.worldid
-	t = Tear(tree)(p)
+	Tear(tree)(p)
 
 	try:
 		WorldObject.get_object_by_id(wid)
@@ -173,4 +173,24 @@ def test_build_tear(s, p):
 	else:
 		assert False
 
+
+@game_test(timeout=60)
+def test_tree_production(s, p):
+	"""Check whether trees produce wood"""
+	settlement, island = settle(s)
+	tree = Build(BUILDINGS.TREE_CLASS, 30, 35, island, settlement=settlement)(p)
+
+	n = 20
+
+	inv = tree.get_component(StorageComponent).inventory
+	for i in xrange(n):  # we want n units
+
+		while not inv[RES.WOOD_ID]:
+			s.run(seconds=5)
+
+		# take one away to free storage space
+		#from tests import set_trace ; set_trace()
+		inv.alter(RES.WOOD_ID, -1)
+
+	# here, n tons of wood have been produced
 

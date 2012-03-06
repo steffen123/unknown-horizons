@@ -23,7 +23,7 @@ __all__ = ['building', 'unit', 'sounds']
 
 import logging
 
-from horizons.util import WorldObject
+from horizons.util import WorldObject, get_all_subclasses
 from horizons.network.packets import SafeUnpickler
 
 class Command(object):
@@ -45,6 +45,11 @@ class Command(object):
 		@return: Propagated return value of manager's execute function.
 		"""
 		return session.manager.execute(self, local)
+
+	@classmethod
+	def get_all_commands(cls):
+		return list(get_all_subclasses(cls))
+
 
 class GenericCommand(Command):
 	"""Code generator for trivial commands on an object.
@@ -69,6 +74,9 @@ class GenericCommand(Command):
 	def _get_object(self):
 		return WorldObject.get_object_by_id(self.obj_id)
 
+	def __str__(self):
+		return "GenericCommand(%s, %s, %s, %s, %s)" % (self.__class__, self._get_object(), self.method, self.args, self.kwargs)
+
 class GenericComponentCommand(Command):
 	"""Code generator for trivial commands on a component."""
 	def __init__(self, component, method, *args, **kwargs):
@@ -83,3 +91,6 @@ class GenericComponentCommand(Command):
 
 	def _get_object(self):
 		return WorldObject.get_object_by_id(self.obj_id)
+
+	def __str__(self):
+		return "GenericCompCommand(%s, %s, %s, %s, %s, %s)" % (self.__class__, self._get_object(), self.component_name, self.method, self.args, self.kwargs)

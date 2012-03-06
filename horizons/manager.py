@@ -53,17 +53,6 @@ class SPManager(LivingObject):
 	def load(self, db):
 		pass
 
-	def tick(self, tick):
-		remove = []
-		for cmd in self.commands:
-			if tick == cmd[0]:
-				cmd[2](issuer = cmd[1])
-				remove.append(cmd)
-		for cmd in remove:
-			self.commands.remove(cmd)
-		if len(self.commands) == 0:
-			self.session.timer.remove_call(self.tick)
-
 	def end(self):
 		self.commands = None
 		super(SPManager, self).end()
@@ -72,7 +61,8 @@ class MPManager(LivingObject):
 	"""Handler for commands.
 	Initiates sending commands over the network for multiplayer games and their correct
 	execution time and is also responsible for handling lags"""
-	log =  logging.getLogger("mpmanager")
+	log = logging.getLogger("mpmanager")
+	command_log = logging.getLogger("mpmanager.commands") # command executions
 	EXECUTIONDELAY = 4
 	HASHDELAY = 4
 	HASH_EVAL_DISTANCE = 2 # interval, check hash every nth tick
@@ -166,6 +156,7 @@ class MPManager(LivingObject):
 		for command_packet in command_packets:
 			for command in command_packet.commandlist:
 				self.log.debug("MPManager: calling command (tick %s): %s", tick, command)
+				self.command_log.debug("MPManagerCommand: (tick %s): %s", tick, command)
 				command(WorldObject.get_object_by_id(command_packet.player_id))
 
 	def can_hash_value_check(self, tick):
@@ -190,7 +181,6 @@ class MPManager(LivingObject):
 	def hash_value_diff(self, player1, hash1, player2, hash2):
 		self.log.error("MPManager: Hash diff:\n%s hash1: %s\n%s hash2: %s" % (player1, hash1, player2, hash2))
 		self.log.error("------------------")
-
 
 	def calculate_execution_tick(self, tick):
 		return tick + self.EXECUTIONDELAY
