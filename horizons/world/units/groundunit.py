@@ -92,7 +92,7 @@ class FightingGroundUnit(MovingWeaponHolder, GroundUnit):
 		#self.name = map(lambda x: unicode(x[0], 'utf-8'), names)
 
 	def go(self, x, y):
-		self.get_component(SelectableComponent).go(x, y)
+		self.get_component(CommandableComponent).go(x, y)
 		self.stop_attack()
 
 	def act_attack(self, dest):
