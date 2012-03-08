@@ -81,26 +81,25 @@ class NamedComponent(Component):
 class ShipNameComponent(NamedComponent):
 
 	def _possible_names(self):
-		names = self.session.db("SELECT name FROM shipnames WHERE for_player = 1")
+		names = self.session.db.get_random_player_ship_name()
 		# We need unicode strings as the name is displayed on screen.
 		return map(lambda x: unicode(x[0], 'utf-8'), names)
-
 
 class PirateShipNameComponent(NamedComponent):
 
 	def _possible_names(self):
-		names = self.session.db("SELECT name FROM shipnames WHERE for_pirate = 1")
+		names = self.session.db.get_random_pirate_ship_name()
 		return map(lambda x: unicode(x[0]), names)
 
 class SettlementNameComponent(NamedComponent):
 
 	def _possible_names(self):
-		names = self.session.db("SELECT name FROM citynames WHERE for_player = 1")
+		names = self.session.db.get_random_player_settlement_name()
 		return map(lambda x: x[0], names)
 
 class GroundUnitNameComponent(NamedComponent):
 
 	def _possible_names(self):
-		names = self.session.db("SELECT name FROM groundunitnames")
+		names = self.session.db.get_random_ground_unit_name()
 		return map(lambda x: x[0], names)
 		

@@ -322,7 +322,29 @@ class UhDbAccessor(DbReader):
 	def get_unit_type_name(self, type_id):
 		"""Returns the name of a unit type identified by its type"""
 		return self.cached_query("SELECT name FROM unit where id = ?", type_id)[0][0]
+		
+		
+	# Names
+	
+	def get_random_player_ship_name(self):
+		""" Returns a random name for a player ship
+		@return: random name"""
+		return self.cached_query("SELECT name FROM shipnames WHERE for_player = 1")
+		
+	def get_random_pirate_ship_name(self):
+		""" Returns a random name for a pirate ship
+		@return: random name"""
+		return self.cached_query("SELECT name FROM shipnames WHERE for_pirate = 1")
 
+	def get_random_player_settlement_name(self):
+		""" Returns a random name for a settlement
+		@return: random name"""
+		return self.cached_query("SELECT name FROM citynames WHERE for_player = 1")
+		
+	def get_random_ground_unit_name(self):
+		""" Returns a random name for a unit
+		@return: random name"""
+		return self.cached_query("SELECT name FROM groundunitnames")
 
 def read_savegame_template(db):
 	savegame_template = open(PATHS.SAVEGAME_TEMPLATE, "r")
