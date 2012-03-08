@@ -111,6 +111,7 @@ class World(BuildingOwner, WorldObject):
 		self.ship_map = None
 		self.fish_indexer = None
 		self.ground_units = None
+		self.ground_unit_map = None
 		self.trader = None
 		self.pirate = None
 		self.islands = None
@@ -164,7 +165,7 @@ class World(BuildingOwner, WorldObject):
 
 		# create ship position list. entries: ship_map[(x, y)] = ship
 		self.ship_map = {}
-		self.ground_unit_map = {}
+		self.ground_unit_map = {}	
 
 		# create shiplist, which is currently used for saving ships
 		# and having at least one reference to them
