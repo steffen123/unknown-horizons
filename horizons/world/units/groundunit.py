@@ -37,13 +37,7 @@ class GroundUnit(Unit):
 	@param x: int x position
 	@param y: int y position
 	"""
-
-
-	# TODO:
-	# set these tabs in yaml as soon as there are ground units
-	# tabs = (GroundUnitOverviewTab,)
-	# enemy_tabs = (EnemyShipOverviewTab,)
-
+	
 	pather_class = SoldierPather
 	health_bar_y = -70
 
@@ -87,9 +81,6 @@ class FightingGroundUnit(MovingWeaponHolder, GroundUnit):
 		#NOTE weapons
 		self.add_weapon_to_storage(WEAPONS.DAGGER)
 		self.add_weapon_to_storage(WEAPONS.CANNON)
-		#names = self.session.db("SELECT name FROM groundunitnames")
-		# We need unicode strings as the name is displayed on screen.
-		#self.name = map(lambda x: unicode(x[0], 'utf-8'), names)
 
 	def go(self, x, y):
 		self.get_component(CommandableComponent).go(x, y)
