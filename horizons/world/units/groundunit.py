@@ -31,7 +31,9 @@ from horizons.constants import GAME_SPEED, WEAPONS
 from horizons.world.units.weaponholder import MovingWeaponHolder
 from horizons.world.component.selectablecomponent import SelectableComponent
 from horizons.world.component.commandablecomponent import CommandableComponent
+from horizons.util.changelistener import metaChangeListenerDecorator
 
+@metaChangeListenerDecorator("user_move_issued")
 class GroundUnit(Unit):
 	"""Class representing ground unit
 	@param x: int x position
@@ -67,13 +69,19 @@ class GroundUnit(Unit):
 		self.session.world.ground_unit_map[self.position.to_tuple()] = weakref.ref(self)
 		self.session.world.ground_unit_map[self._next_target.to_tuple()] = weakref.ref(self)
 
+	def go(self, x, y):
+		super(GroundUnit, self).go(x, y)
+		self.on_user_move_issued()
+		
 	def load(self, db, worldid):
 		super(GroundUnit, self).load(db, worldid)
 
 		# register unit in world
 		self.session.world.ground_units.append(self)
 		self.session.world.ground_unit_map[self.position.to_tuple()] = weakref.ref(self)
-
+		
+	
+@metaChangeListenerDecorator("user_move_issued")
 class FightingGroundUnit(MovingWeaponHolder, GroundUnit):
 	"""Weapon Holder Ground Unit"""
 	def __init__(self, x, y, **kwargs):
@@ -83,7 +91,8 @@ class FightingGroundUnit(MovingWeaponHolder, GroundUnit):
 		self.add_weapon_to_storage(WEAPONS.CANNON)
 
 	def go(self, x, y):
-		self.get_component(CommandableComponent).go(x, y)
+		super(FightingGroundUnit, self).go(x, y)
+		self.on_user_move_issued()
 		self.stop_attack()
 
 	def act_attack(self, dest):

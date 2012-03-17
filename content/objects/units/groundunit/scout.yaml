@@ -1,0 +1,18 @@
+baseclass: groundunit.GroundUnit
+id: 1000444
+name: Scout
+radius: 3
+velocity: 10.0
+components:
+- SelectableComponent:
+    type: unit
+    tabs: [EnemyGroundUnitOverviewTab,]
+    enemy_tabs: [EnemyGroundUnitOverviewTab,]
+- AmbientSoundComponent
+- GroundUnitNameComponent
+- HealthComponent:
+   maxhealth: 100
+- CommandableComponent   
+
+actionsets:
+   as_groundunit0: {level: 0}

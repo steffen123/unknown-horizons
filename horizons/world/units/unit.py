@@ -29,7 +29,9 @@ from horizons.constants import LAYERS
 from horizons.world.component.healthcomponent import HealthComponent
 from horizons.world.component.storagecomponent import StorageComponent
 from horizons.extscheduler import ExtScheduler
+from horizons.util.changelistener import metaChangeListenerDecorator
 
+@metaChangeListenerDecorator("user_move_issued")
 class Unit(MovingObject):
 	log = logging.getLogger("world.units")
 	is_unit = True
@@ -221,6 +223,10 @@ class Unit(MovingObject):
 			if path:
 				return (possible_target, path)
 		return (None, None)
+		
+	def go(self, x, y):
+		super(Unit, self).go(x, y)
+		self.on_user_move_issued()
 
 	@property
 	def classname(self):

@@ -417,9 +417,11 @@ class World(BuildingOwner, WorldObject):
 			# Adding ships for the players
 			# hack to place the ship on the development map
 			point = self.get_random_possible_ship_position()
+			point2 = self.get_random_possible_ground_unit_position()
 			# Execute command directly, not via manager, because else it would be transmitted over the
 			# network to other players. Those however will do the same thing anyways.
 			ship = CreateUnit(player.worldid, UNITS.PLAYER_SHIP_CLASS, point.x, point.y)(issuer=self.session.world.player)
+			CreateUnit(player.worldid, 1000444, point2.x, point2.y)(issuer=self.session.world.player)
 			# give ship basic resources
 			for res, amount in self.session.db("SELECT resource, amount FROM start_resources"):
 				ship.get_component(StorageComponent).inventory.alter(res, amount)
