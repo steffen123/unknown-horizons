@@ -16,7 +16,7 @@
 
 		<HBox position="42,470"  min_size="0,40">
 			<Label name="main_menu_label" text="Main menu:" />
-			<CancelButton name="cancel"  tooltip="Exit to main menu" />
+			<CancelButton name="cancel"  helptext="Exit to main menu" />
 		</HBox>
 	</Container>
 
@@ -30,12 +30,12 @@
 	<Icon image="content/gui/images/background/mainmenu/selected_color_border.png" position="284,363" />
 
 	<!-- load the proper xml submenu template (scenario, random maps, free play, ..) -->
-	<VBox max_size="320,480"  min_size="320,480"  position="520,162"  name="right_side_box" />
+	<VBox max_size="320,480"  min_size="320,480"  position="520,152"  name="right_side_box" />
 
 	<HBox min_size="0,40" position="640, 600">
 	<Spacer />
 		<Label name="start_game_label"  text="Start game:" />
-		<OkButton name="okay"  tooltip="Start game" />
+		<OkButton name="okay"  helptext="Start game" />
 	</HBox>
 
 </Container>

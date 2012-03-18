@@ -19,18 +19,26 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
-# ###################################################################
+###############################################################################
+#
+# == I18N DEV USE CASES: CHEATSHEET ==
+#
+# ** Refer to  development/copy_pofiles.sh  for help with building or updating
+#    the translation files for Unknown Horizons.
+#
+###############################################################################
+#
 # WARNING: This file is generated automagically.
 #          You need to update it to see changes to strings in-game.
 #          DO NOT MANUALLY UPDATE THIS FILE (by editing strings).
 #          The script to generate .pot templates calls the following:
 # ./development/extract_strings_from_xml.py  horizons/i18n/guitranslations.py
-#          If you changed strings in code, you might just run this
-#          command as well.
+#
 # NOTE: In string-freeze mode (shortly before releases, usually
 #       announced in a meeting), updates to this file must not happen
 #       without permission of the responsible translation admin!
-# ###################################################################
+#
+###############################################################################
 
 from horizons.constants import VERSION
 
@@ -59,53 +67,24 @@ def set_translations():
 		},
 
 	"city_info.xml" : {
-		# (tooltip of widget: city_info_inhabitants)
-		("city_info_inhabitants"       , "tooltip" ): _("Inhabitants"),
-		# (tooltip of widget: city_name)
-		("city_name"                   , "tooltip" ): _("Click to change the name of your settlement."),
+		# (helptext of widget: city_info_inhabitants)
+		("city_info_inhabitants"       , "helptext"): _("Inhabitants"),
 		},
 
 	"minimap.xml" : {
-		# (tooltip of widget: build)
-		("build"                       , "tooltip" ): _("Build menu (B)"),
-		# (tooltip of widget: destroy_tool)
-		("destroy_tool"                , "tooltip" ): _("Destroy (X)"),
-		# (tooltip of widget: diplomacyButton)
-		("diplomacyButton"             , "tooltip" ): _("Diplomacy"),
-		# (tooltip of widget: gameMenuButton)
-		("gameMenuButton"              , "tooltip" ): _("Game menu (Esc)"),
-		# (tooltip of widget: logbook)
-		("logbook"                     , "tooltip" ): _("Captain's log (L)"),
-		# (tooltip of widget: rotateLeft)
-		("rotateLeft"                  , "tooltip" ): _("Rotate map counterclockwise (,)"),
-		# (tooltip of widget: rotateRight)
-		("rotateRight"                 , "tooltip" ): _("Rotate map clockwise (.)"),
-		# (tooltip of widget: speedDown)
-		("speedDown"                   , "tooltip" ): _("Decrease game speed (-)"),
-		# (tooltip of widget: speedUp)
-		("speedUp"                     , "tooltip" ): _("Increase game speed (+)"),
-		# (tooltip of widget: zoomIn)
-		("zoomIn"                      , "tooltip" ): _("Zoom in"),
-		# (tooltip of widget: zoomOut)
-		("zoomOut"                     , "tooltip" ): _("Zoom out"),
+		# (helptext of widget: speedDown)
+		("speedDown"                   , "helptext"): _("Decrease game speed (-)"),
+		# (helptext of widget: speedUp)
+		("speedUp"                     , "helptext"): _("Increase game speed (+)"),
+		# (helptext of widget: zoomIn)
+		("zoomIn"                      , "helptext"): _("Zoom in"),
+		# (helptext of widget: zoomOut)
+		("zoomOut"                     , "helptext"): _("Zoom out"),
 		},
 
-	"status.xml" : {
-		# (tooltip of widget: boards_icon)
-		("boards_icon"                 , "tooltip" ): _("Boards"),
-		# (tooltip of widget: bricks_icon)
-		("bricks_icon"                 , "tooltip" ): _("Bricks"),
-		# (tooltip of widget: food_icon)
-		("food_icon"                   , "tooltip" ): _("Food"),
-		# (tooltip of widget: textiles_icon)
-		("textiles_icon"               , "tooltip" ): _("Textiles"),
-		# (tooltip of widget: tools_icon)
-		("tools_icon"                  , "tooltip" ): _("Tools"),
-		},
-
-	"status_gold.xml" : {
-		# (tooltip of widget: gold_icon)
-		("gold_icon"                   , "tooltip" ): _("Gold"),
+	"resource_overview_bar_gold.xml" : {
+		# (helptext of widget: background_icon)
+		("background_icon"             , "helptext"): _("Gold"),
 		},
 
 	"change_name.xml" : {
@@ -113,8 +92,10 @@ def set_translations():
 		("enter_new_name_lbl"          , "text"    ): _("Enter new name:"),
 		# (text of widget: headline_change_name)
 		("headline_change_name"        , "text"    ): _("Change name"),
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Apply the new name"),
+		# (text of widget: old_name_label)
+		("old_name_label"              , "text"    ): _("Old name:"),
+		# (helptext of widget: okButton)
+		("okButton"                    , "helptext"): _("Apply the new name"),
 		},
 
 	"chat.xml" : {
@@ -129,8 +110,8 @@ def set_translations():
 		("enter_new_name_lbl"          , "text"    ): _("Enter prefix:"),
 		# (text of widget: headline_change_name)
 		("headline_change_name"        , "text"    ): _("Save map"),
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Save the map"),
+		# (helptext of widget: okButton)
+		("okButton"                    , "helptext"): _("Save the map"),
 		},
 
 	"boatbuilder.xml" : {
@@ -146,14 +127,10 @@ def set_translations():
 		("BB_progress_label"           , "text"    ): _("Construction progress:"),
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Building overview"),
-		# (tooltip of widget: BB_cancel_button) abort construction of a ship, lose invested resources
-		("BB_cancel_button"            , "tooltip" ): _("Cancel all building progress"),
-		# (tooltip of widget: toggle_active_active) Pauses the current ship production, can be resumed later
-		("toggle_active_active"        , "tooltip" ): _("Pause"),
-		# (tooltip of widget: toggle_active_inactive) Resumes the currently paused ship production
-		("toggle_active_inactive"      , "tooltip" ): _("Resume"),
-		# (tooltip of widget: running_costs_label)
-		("running_costs_label"         , "tooltip" ): _("Running costs"),
+		# (helptext of widget: BB_cancel_button) abort construction of a ship, lose invested resources
+		("BB_cancel_button"            , "helptext"): _("Cancel all building progress"),
+		# (helptext of widget: running_costs_label)
+		("running_costs_label"         , "helptext"): _("Running costs"),
 		},
 
 	"boatbuilder_trade.xml" : {
@@ -161,16 +138,16 @@ def set_translations():
 		("headline"                    , "text"    ): _("Trade boats"),
 		# (text of widget: headline_BB_trade_ship1) The huker is a ship class mostly used for fishing. It is the starting ship of players in Unknown Horizons. If you are not sure how to translate, just leave the field empty and it will be called Huker.
 		("headline_BB_trade_ship1"     , "text"    ): _("Huker"),
-		# (tooltip of widget: BB_build_trade_1)
-		("BB_build_trade_1"            , "tooltip" ): _("Build this ship!"),
-		# (tooltip of widget: costs_001)
-		("costs_001"                   , "tooltip" ): _("Money"),
-		# (tooltip of widget: costs_003)
-		("costs_003"                   , "tooltip" ): _("Cloth"),
-		# (tooltip of widget: costs_004)
-		("costs_004"                   , "tooltip" ): _("Boards"),
-		# (tooltip of widget: costs_006)
-		("costs_006"                   , "tooltip" ): _("Tools"),
+		# (helptext of widget: BB_build_trade_1)
+		("BB_build_trade_1"            , "helptext"): _("Build this ship!"),
+		# (helptext of widget: costs_001)
+		("costs_001"                   , "helptext"): _("Money"),
+		# (helptext of widget: costs_003)
+		("costs_003"                   , "helptext"): _("Cloth"),
+		# (helptext of widget: costs_004)
+		("costs_004"                   , "helptext"): _("Boards"),
+		# (helptext of widget: costs_006)
+		("costs_006"                   , "helptext"): _("Tools"),
 		},
 
 	"boatbuilder_war1.xml" : {
@@ -178,18 +155,18 @@ def set_translations():
 		("headline"                    , "text"    ): _("War boats"),
 		# (text of widget: headline_BB_war1_ship1)
 		("headline_BB_war1_ship1"      , "text"    ): _("Frigate"),
-		# (tooltip of widget: BB_build_war1_1)
-		("BB_build_war1_1"             , "tooltip" ): _("Build this ship!"),
-		# (tooltip of widget: costs_001)
-		("costs_001"                   , "tooltip" ): _("Money"),
-		# (tooltip of widget: costs_003)
-		("costs_003"                   , "tooltip" ): _("Cloth"),
-		# (tooltip of widget: costs_004)
-		("costs_004"                   , "tooltip" ): _("Boards"),
-		# (tooltip of widget: costs_006)
-		("costs_006"                   , "tooltip" ): _("Tools"),
-		# (tooltip of widget: costs_040)
-		("costs_040"                   , "tooltip" ): _("Cannons"),
+		# (helptext of widget: BB_build_war1_1)
+		("BB_build_war1_1"             , "helptext"): _("Build this ship!"),
+		# (helptext of widget: costs_001)
+		("costs_001"                   , "helptext"): _("Money"),
+		# (helptext of widget: costs_003)
+		("costs_003"                   , "helptext"): _("Cloth"),
+		# (helptext of widget: costs_004)
+		("costs_004"                   , "helptext"): _("Boards"),
+		# (helptext of widget: costs_006)
+		("costs_006"                   , "helptext"): _("Tools"),
+		# (helptext of widget: costs_040)
+		("costs_040"                   , "helptext"): _("Cannons"),
 		},
 
 	"diplomacy.xml" : {
@@ -209,19 +186,62 @@ def set_translations():
 	"overview_farm.xml" : {
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Building overview"),
-		# (tooltip of widget: capacity_utilisation_label)
-		("capacity_utilisation_label"  , "tooltip" ): _("Capacity utilization"),
-		# (tooltip of widget: running_costs_label)
-		("running_costs_label"         , "tooltip" ): _("Running costs"),
-		# (tooltip of widget: capacity_utilisation)
-		("capacity_utilisation"        , "tooltip" ): _("Capacity utilization"),
-		# (tooltip of widget: running_costs)
-		("running_costs"               , "tooltip" ): _("Running costs"),
+		# (helptext of widget: capacity_utilisation_label)
+		("capacity_utilisation_label"  , "helptext"): _("Capacity utilization"),
+		# (helptext of widget: running_costs_label)
+		("running_costs_label"         , "helptext"): _("Running costs"),
+		# (helptext of widget: capacity_utilisation)
+		("capacity_utilisation"        , "helptext"): _("Capacity utilization"),
+		# (helptext of widget: running_costs)
+		("running_costs"               , "helptext"): _("Running costs"),
 		},
 
 	"island_inventory.xml" : {
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Settlement inventory"),
+		},
+
+	"mainsquare_citizens.xml" : {
+		# (text of widget: headline)
+		("headline"                    , "text"    ): _("Citizens"),
+		# (text of widget: headline_residents_per_house)
+		("headline_residents_per_house", "text"    ): _("Residents per house"),
+		# (text of widget: headline_residents_total)
+		("headline_residents_total"    , "text"    ): _("Summary"),
+		# (text of widget: houses)
+		("houses"                      , "text"    ): _("houses"),
+		# (text of widget: resident_1)
+		("resident_1"                  , "text"    ): _("1 resident"),
+		# (text of widget: resident_2)
+		("resident_2"                  , "text"    ): _("2 residents"),
+		# (text of widget: resident_3)
+		("resident_3"                  , "text"    ): _("3 residents"),
+		# (text of widget: resident_4)
+		("resident_4"                  , "text"    ): _("4 residents"),
+		# (text of widget: resident_5)
+		("resident_5"                  , "text"    ): _("5 residents"),
+		# (text of widget: resident_6)
+		("resident_6"                  , "text"    ): _("6 residents"),
+		# (text of widget: resident_7)
+		("resident_7"                  , "text"    ): _("7 residents"),
+		# (text of widget: resident_8)
+		("resident_8"                  , "text"    ): _("8 residents"),
+		# (text of widget: residents)
+		("residents"                   , "text"    ): _("residents"),
+		# (text of widget: tax_label)
+		("tax_label"                   , "text"    ): _("Taxes:"),
+		# (text of widget: upgrades_lbl)
+		("upgrades_lbl"                , "text"    ): _("Upgrade not possible:"),
+		# (helptext of widget: allow_upgrades)
+		("allow_upgrades"              , "helptext"): _("This is the current maximum increment!"),
+		# (helptext of widget: paid_taxes_icon)
+		("paid_taxes_icon"             , "helptext"): _("Paid taxes"),
+		# (helptext of widget: tax_rate_icon)
+		("tax_rate_icon"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: tax_val_label)
+		("tax_val_label"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: taxes)
+		("taxes"                       , "helptext"): _("Paid taxes"),
 		},
 
 	"mainsquare_inhabitants.xml" : {
@@ -254,14 +274,14 @@ def set_translations():
 		("tax_label"                   , "text"    ): _("Taxes:"),
 		# (text of widget: upgrades_lbl)
 		("upgrades_lbl"                , "text"    ): _("Upgrade permissions:"),
-		# (tooltip of widget: paid_taxes_icon)
-		("paid_taxes_icon"             , "tooltip" ): _("Paid taxes"),
-		# (tooltip of widget: tax_rate_icon)
-		("tax_rate_icon"               , "tooltip" ): _("Tax rate"),
-		# (tooltip of widget: tax_val_label)
-		("tax_val_label"               , "tooltip" ): _("Tax rate"),
-		# (tooltip of widget: taxes)
-		("taxes"                       , "tooltip" ): _("Paid taxes"),
+		# (helptext of widget: paid_taxes_icon)
+		("paid_taxes_icon"             , "helptext"): _("Paid taxes"),
+		# (helptext of widget: tax_rate_icon)
+		("tax_rate_icon"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: tax_val_label)
+		("tax_val_label"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: taxes)
+		("taxes"                       , "helptext"): _("Paid taxes"),
 		},
 
 	"mainsquare_sailors.xml" : {
@@ -283,14 +303,14 @@ def set_translations():
 		("tax_label"                   , "text"    ): _("Taxes:"),
 		# (text of widget: upgrades_lbl)
 		("upgrades_lbl"                , "text"    ): _("Upgrade permissions:"),
-		# (tooltip of widget: paid_taxes_icon)
-		("paid_taxes_icon"             , "tooltip" ): _("Paid taxes"),
-		# (tooltip of widget: tax_rate_icon)
-		("tax_rate_icon"               , "tooltip" ): _("Tax rate"),
-		# (tooltip of widget: tax_val_label)
-		("tax_val_label"               , "tooltip" ): _("Tax rate"),
-		# (tooltip of widget: taxes)
-		("taxes"                       , "tooltip" ): _("Paid taxes"),
+		# (helptext of widget: paid_taxes_icon)
+		("paid_taxes_icon"             , "helptext"): _("Paid taxes"),
+		# (helptext of widget: tax_rate_icon)
+		("tax_rate_icon"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: tax_val_label)
+		("tax_val_label"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: taxes)
+		("taxes"                       , "helptext"): _("Paid taxes"),
 		},
 
 	"mainsquare_settlers.xml" : {
@@ -317,17 +337,15 @@ def set_translations():
 		# (text of widget: tax_label)
 		("tax_label"                   , "text"    ): _("Taxes:"),
 		# (text of widget: upgrades_lbl)
-		("upgrades_lbl"                , "text"    ): _("Upgrade not possible:"),
-		# (tooltip of widget: allow_upgrades)
-		("allow_upgrades"              , "tooltip" ): _("This is the current maximum increment!"),
-		# (tooltip of widget: paid_taxes_icon)
-		("paid_taxes_icon"             , "tooltip" ): _("Paid taxes"),
-		# (tooltip of widget: tax_rate_icon)
-		("tax_rate_icon"               , "tooltip" ): _("Tax rate"),
-		# (tooltip of widget: tax_val_label)
-		("tax_val_label"               , "tooltip" ): _("Tax rate"),
-		# (tooltip of widget: taxes)
-		("taxes"                       , "tooltip" ): _("Paid taxes"),
+		("upgrades_lbl"                , "text"    ): _("Upgrade permissions:"),
+		# (helptext of widget: paid_taxes_icon)
+		("paid_taxes_icon"             , "helptext"): _("Paid taxes"),
+		# (helptext of widget: tax_rate_icon)
+		("tax_rate_icon"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: tax_val_label)
+		("tax_val_label"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: taxes)
+		("taxes"                       , "helptext"): _("Paid taxes"),
 		},
 
 	"overview_enemywarehouse.xml" : {
@@ -345,14 +363,14 @@ def set_translations():
 	"overview_productionbuilding.xml" : {
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Building overview"),
-		# (tooltip of widget: capacity_utilisation_label)
-		("capacity_utilisation_label"  , "tooltip" ): _("Capacity utilization"),
-		# (tooltip of widget: running_costs_label)
-		("running_costs_label"         , "tooltip" ): _("Running costs"),
-		# (tooltip of widget: capacity_utilisation)
-		("capacity_utilisation"        , "tooltip" ): _("Capacity utilization"),
-		# (tooltip of widget: running_costs)
-		("running_costs"               , "tooltip" ): _("Running costs"),
+		# (helptext of widget: capacity_utilisation_label)
+		("capacity_utilisation_label"  , "helptext"): _("Capacity utilization"),
+		# (helptext of widget: running_costs_label)
+		("running_costs_label"         , "helptext"): _("Running costs"),
+		# (helptext of widget: capacity_utilisation)
+		("capacity_utilisation"        , "helptext"): _("Capacity utilization"),
+		# (helptext of widget: running_costs)
+		("running_costs"               , "helptext"): _("Running costs"),
 		},
 
 	"overview_resourcedeposit.xml" : {
@@ -369,27 +387,40 @@ def set_translations():
 		("needed_res_label"            , "text"    ): _("Needed resources:"),
 		# (text of widget: tax_label)
 		("tax_label"                   , "text"    ): _("Taxes:"),
-		# (tooltip of widget: happiness_label)
-		("happiness_label"             , "tooltip" ): _("Happiness"),
-		# (tooltip of widget: paid_taxes_label)
-		("paid_taxes_label"            , "tooltip" ): _("Paid taxes"),
-		# (tooltip of widget: paid_taxes_label)
-		("paid_taxes_label"            , "tooltip" ): _("Tax rate"),
-		# (tooltip of widget: residents_label)
-		("residents_label"             , "tooltip" ): _("Residents"),
-		# (tooltip of widget: inhabitants)
-		("inhabitants"                 , "tooltip" ): _("Residents"),
-		# (tooltip of widget: tax_val_label)
-		("tax_val_label"               , "tooltip" ): _("Tax rate"),
-		# (tooltip of widget: taxes)
-		("taxes"                       , "tooltip" ): _("Paid taxes"),
-		# (tooltip of widget: happiness)
-		("happiness"                   , "tooltip" ): _("Happiness"),
+		# (helptext of widget: happiness_label)
+		("happiness_label"             , "helptext"): _("Happiness"),
+		# (helptext of widget: paid_taxes_label)
+		("paid_taxes_label"            , "helptext"): _("Paid taxes"),
+		# (helptext of widget: paid_taxes_label)
+		("paid_taxes_label"            , "helptext"): _("Tax rate"),
+		# (helptext of widget: residents_label)
+		("residents_label"             , "helptext"): _("Residents"),
+		# (helptext of widget: headline)
+		("headline"                    , "helptext"): _("Click to change the name of your settlement"),
+		# (helptext of widget: inhabitants)
+		("inhabitants"                 , "helptext"): _("Residents"),
+		# (helptext of widget: tax_val_label)
+		("tax_val_label"               , "helptext"): _("Tax rate"),
+		# (helptext of widget: taxes)
+		("taxes"                       , "helptext"): _("Paid taxes"),
+		# (helptext of widget: happiness)
+		("happiness"                   , "helptext"): _("Happiness"),
 		},
 
 	"overview_signalfire.xml" : {
 		# (text of widget: signal_fire_description_lbl)
 		("signal_fire_description_lbl" , "text"    ): _("The signal fire shows the free trader how to reach your settlement in case you want to buy or sell goods."),
+		},
+
+	"overview_tower.xml" : {
+		# (text of widget: name_label)
+		("name_label"                  , "text"    ): _("Name:"),
+		# (helptext of widget: running_costs_label)
+		("running_costs_label"         , "helptext"): _("Running costs"),
+		# (helptext of widget: headline)
+		("headline"                    , "helptext"): _("Click to change the name of your settlement"),
+		# (helptext of widget: running_costs)
+		("running_costs"               , "helptext"): _("Running costs"),
 		},
 
 	"overview_tradership.xml" : {
@@ -400,14 +431,16 @@ def set_translations():
 	"overview_warehouse.xml" : {
 		# (text of widget: name_label)
 		("name_label"                  , "text"    ): _("Name:"),
-		# (tooltip of widget: collector_utilisation_label)
-		("collector_utilisation_label" , "tooltip" ): _("Collector utilisation"),
-		# (tooltip of widget: running_costs_label)
-		("running_costs_label"         , "tooltip" ): _("Running costs"),
-		# (tooltip of widget: collector_utilisation) Percentage describing how busy the collectors were (100% = always going for / already carrying full load of goods)
-		("collector_utilisation"       , "tooltip" ): _("Collector utilisation"),
-		# (tooltip of widget: running_costs)
-		("running_costs"               , "tooltip" ): _("Running costs"),
+		# (helptext of widget: collector_utilisation_label)
+		("collector_utilisation_label" , "helptext"): _("Collector utilisation"),
+		# (helptext of widget: running_costs_label)
+		("running_costs_label"         , "helptext"): _("Running costs"),
+		# (helptext of widget: collector_utilisation) Percentage describing how busy the collectors were (100% = always going for / already carrying full load of goods)
+		("collector_utilisation"       , "helptext"): _("Collector utilisation"),
+		# (helptext of widget: headline)
+		("headline"                    , "helptext"): _("Click to change the name of your settlement"),
+		# (helptext of widget: running_costs)
+		("running_costs"               , "helptext"): _("Running costs"),
 		},
 
 	"overviewtab.xml" : {
@@ -444,38 +477,32 @@ def set_translations():
 		},
 
 	"overview_trade_ship.xml" : {
-		# (tooltip of widget: name)
-		("name"                        , "tooltip" ): _("Click to change the name of this ship."),
-		# (tooltip of widget: configure_route)
-		("configure_route"             , "tooltip" ): _("Configure trading route"),
-		# (tooltip of widget: found_settlement)
-		("found_settlement"            , "tooltip" ): _("Build settlement"),
-		# (tooltip of widget: trade)
-		("trade"                       , "tooltip" ): _("Trade"),
+		# (helptext of widget: name)
+		("name"                        , "helptext"): _("Click to change the name of this ship"),
+		# (helptext of widget: configure_route)
+		("configure_route"             , "helptext"): _("Configure trading route"),
+		# (helptext of widget: found_settlement)
+		("found_settlement"            , "helptext"): _("Build settlement"),
+		# (helptext of widget: trade)
+		("trade"                       , "helptext"): _("Trade"),
 		},
 
 	"overview_war_ship.xml" : {
-		# (tooltip of widget: name)
-		("name"                        , "tooltip" ): _("Click to change the name of this ship."),
-		# (tooltip of widget: configure_route)
-		("configure_route"             , "tooltip" ): _("Configure trading route"),
-		# (tooltip of widget: found_settlement)
-		("found_settlement"            , "tooltip" ): _("Build settlement"),
-		# (tooltip of widget: trade)
-		("trade"                       , "tooltip" ): _("Trade"),
+		# (helptext of widget: name)
+		("name"                        , "helptext"): _("Click to change the name of this ship"),
+		# (helptext of widget: configure_route)
+		("configure_route"             , "helptext"): _("Configure trading route"),
+		# (helptext of widget: found_settlement)
+		("found_settlement"            , "helptext"): _("Build settlement"),
+		# (helptext of widget: trade)
+		("trade"                       , "helptext"): _("Trade"),
 		},
 
 	"buysellmenu.xml" : {
-		# (text of widget: buy_label)
-		("buy_label"                   , "text"    ): _("Buy resources"),
-		# (text of widget: buysell_help_label)
-		("buysell_help_label"          , "text"    ): _("Click on slot icon to toggle mode:"),
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Buy or sell resources"),
 		# (text of widget: headline_trade_history)
 		("headline_trade_history"      , "text"    ): _("Trade history"),
-		# (text of widget: sell_label)
-		("sell_label"                  , "text"    ): _("Sell resources"),
 		},
 
 	"select_trade_resource.xml" : {
@@ -500,40 +527,52 @@ def set_translations():
 		("sell_income_label"           , "text"    ): _("Sale"),
 		# (text of widget: taxes_label)
 		("taxes_label"                 , "text"    ): _("Taxes"),
-		# (tooltip of widget: show_production_overview)
-		("show_production_overview"    , "tooltip" ): _("Show resources produced in this settlement"),
+		# (helptext of widget: show_production_overview)
+		("show_production_overview"    , "helptext"): _("Show resources produced in this settlement"),
 		},
 
-	"overview_farmproductionline.xml" : {
-		# (tooltip of widget: toggle_active_active)
-		("toggle_active_active"        , "tooltip" ): _("Pause production"),
-		# (tooltip of widget: toggle_active_inactive)
-		("toggle_active_inactive"      , "tooltip" ): _("Start production"),
-		},
-
-	"overview_productionline.xml" : {
-		# (tooltip of widget: toggle_active_active)
-		("toggle_active_active"        , "tooltip" ): _("Pause production"),
-		# (tooltip of widget: toggle_active_inactive)
-		("toggle_active_inactive"      , "tooltip" ): _("Start production"),
-		},
-
-	"route_entry.xml" : {
-		# (tooltip of widget: delete_warehouse) Trade route entry
-		("delete_warehouse"            , "tooltip" ): _("Delete entry"),
-		# (tooltip of widget: move_down) Trade route entry
-		("move_down"                   , "tooltip" ): _("Move down"),
-		# (tooltip of widget: move_up) Trade route entry
-		("move_up"                     , "tooltip" ): _("Move up"),
+	"resbar_resource_selection.xml" : {
+		# (text of widget: make_default_btn)
+		("make_default_btn"            , "text"    ): _("Save as default"),
+		# (text of widget: reset_default_btn)
+		("reset_default_btn"           , "text"    ): _("Restore default"),
+		# (text of widget: headline) Please keep the translation similarly short and concise, else the tooltip is not well understood by players.
+		("headline"                    , "text"    ): _("Select resource:"),
+		# (helptext of widget: make_default_btn)
+		("make_default_btn"            , "helptext"): _("Save current resource configuration as default for all settlements."),
+		# (helptext of widget: reset_default_btn)
+		("reset_default_btn"           , "helptext"): _("Reset default resource configuration for all settlements."),
+		# (helptext of widget: headline) Please keep the translation similarly short and concise, else the tooltip is not well understood by players.
+		("headline"                    , "helptext"): _("The resource you select is displayed instead of the current one. Empty by clicking on X."),
 		},
 
 	"captains_log.xml" : {
-		# (tooltip of widget: okButton) Captain's Log: logbook/diary used in scenarios
-		("okButton"                    , "tooltip" ): _("Leave Captain's log"),
-		# (tooltip of widget: backwardButton) Entry of Captain's Log (logbook/diary used in scenarios)
-		("backwardButton"              , "tooltip" ): _("Read previous entries"),
-		# (tooltip of widget: forwardButton) Entry of Captain's Log (logbook/diary used in scenarios)
-		("forwardButton"               , "tooltip" ): _("Read next entries"),
+		# (text of widget: stats_players)
+		("stats_players"               , "text"    ): _("Players"),
+		# (text of widget: stats_settlements)
+		("stats_settlements"           , "text"    ): _("My settlements"),
+		# (text of widget: stats_ships)
+		("stats_ships"                 , "text"    ): _("My ships"),
+		# (text of widget: wb2) Only filter messages important for your own settlements (disasters, new increment, ...)
+		("wb2"                         , "text"    ): _("Own settlements"),
+		# (text of widget: wb5) Sends the chat message to all allied players.
+		("wb5"                         , "text"    ): _("Allies"),
+		# (text of widget: weird_button_1) Displays all notifications and game messages
+		("weird_button_1"              , "text"    ): _("Whole world"),
+		# (text of widget: weird_button_4) Sends the chat message to all players (default)
+		("weird_button_4"              , "text"    ): _("Everybody"),
+		# (text of widget: headline_chat)
+		("headline_chat"               , "text"    ): _("Chat"),
+		# (text of widget: headline_game_messages)
+		("headline_game_messages"      , "text"    ): _("Game messages"),
+		# (text of widget: headline_statistics)
+		("headline_statistics"         , "text"    ): _("Statistics"),
+		# (helptext of widget: okButton)
+		("okButton"                    , "helptext"): _("Return to game"),
+		# (helptext of widget: backwardButton) Entry of Captain's Log (logbook/diary used in scenarios)
+		("backwardButton"              , "helptext"): _("Read previous entries"),
+		# (helptext of widget: forwardButton) Entry of Captain's Log (logbook/diary used in scenarios)
+		("forwardButton"               , "helptext"): _("Read next entries"),
 		},
 
 	"choose_next_scenario.xml" : {
@@ -543,26 +582,28 @@ def set_translations():
 		("head_right"                  , "text"    ): _("Scenario description"),
 		# (text of widget: scenario_details) More text describing the scenario
 		("scenario_details"            , "text"    ): _("Details:"),
-		# (tooltip of widget: cancelButton) Players either select the next scenario they want to play or press this button
-		("cancelButton"                , "tooltip" ): _("Continue playing"),
-		# (tooltip of widget: choose_scenario) Select which scenario to play
-		("choose_scenario"             , "tooltip" ): _("Choose this scenario"),
+		# (helptext of widget: cancelButton) Players either select the next scenario they want to play or press this button
+		("cancelButton"                , "helptext"): _("Continue playing"),
+		# (helptext of widget: choose_scenario) Select which scenario to play
+		("choose_scenario"             , "helptext"): _("Choose this scenario"),
 		},
 
 	"configure_route.xml" : {
+		# (text of widget: lbl_route_activity)
+		("lbl_route_activity"          , "text"    ): _("Route activity:"),
 		# (text of widget: lbl_wait_at_load) Trade route setting: Whether to wait until all goods could be loaded.
 		("lbl_wait_at_load"            , "text"    ): _("Wait at load:"),
 		# (text of widget: lbl_wait_at_unload) Trade route setting: Whether to wait until all goods could be unloaded.
 		("lbl_wait_at_unload"          , "text"    ): _("Wait at unload:"),
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Exit"),
-		# (tooltip of widget: start_route) Trade route
-		("start_route"                 , "tooltip" ): _("Start route"),
+		# (helptext of widget: okButton)
+		("okButton"                    , "helptext"): _("Exit"),
+		# (helptext of widget: start_route) Trade route
+		("start_route"                 , "helptext"): _("Start route"),
 		},
 
 	"island_production.xml" : {
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Close"),
+		# (helptext of widget: okButton)
+		("okButton"                    , "helptext"): _("Close"),
 		},
 
 	"players_overview.xml" : {
@@ -584,8 +625,6 @@ def set_translations():
 		("total_score"                 , "text"    ): _("Total"),
 		# (text of widget: unit_score)
 		("unit_score"                  , "text"    ): _("Units"),
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Close"),
 		},
 
 	"players_settlements.xml" : {
@@ -599,8 +638,6 @@ def set_translations():
 		("settlement_name"             , "text"    ): _("Name"),
 		# (text of widget: taxes)
 		("taxes"                       , "text"    ): _("Taxes"),
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Close"),
 		},
 
 	"ships_list.xml" : {
@@ -614,22 +651,22 @@ def set_translations():
 		("status"                      , "text"    ): _("Status"),
 		# (text of widget: weapons)
 		("weapons"                     , "text"    ): _("Weapons"),
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Close"),
 		},
 
 	"stancewidget.xml" : {
-		# (tooltip of widget: aggressive) Description of combat stance (how units behave when fighting)
-		("aggressive"                  , "tooltip" ): _("Aggressive"),
-		# (tooltip of widget: flee) Description of combat stance (how units behave when fighting)
-		("flee"                        , "tooltip" ): _("Flee"),
-		# (tooltip of widget: hold_ground) Description of combat stance (how units behave when fighting)
-		("hold_ground"                 , "tooltip" ): _("Hold ground"),
-		# (tooltip of widget: none) Description of combat stance (how units behave when fighting)
-		("none"                        , "tooltip" ): _("Passive"),
+		# (helptext of widget: aggressive_stance) Description of combat stance (how units behave when fighting)
+		("aggressive_stance"           , "helptext"): _("Aggressive"),
+		# (helptext of widget: flee_stance) Description of combat stance (how units behave when fighting)
+		("flee_stance"                 , "helptext"): _("Flee"),
+		# (helptext of widget: hold_ground_stance) Description of combat stance (how units behave when fighting)
+		("hold_ground_stance"          , "helptext"): _("Hold ground"),
+		# (helptext of widget: none_stance) Description of combat stance (how units behave when fighting)
+		("none_stance"                 , "helptext"): _("Passive"),
 		},
 
 	"help.xml" : {
+		# (text of widget: fife_and_uh_team)
+		("fife_and_uh_team"            , "text"    ): _("The FIFE and Unknown Horizons development teams"),
 		# (text of widget: have_fun)
 		("have_fun"                    , "text"    ): _("Have fun."),
 		# (text of widget: headline)
@@ -690,10 +727,8 @@ def set_translations():
 		("lbl_TRANSLUCENCY"            , "text"    ): _("Toggle translucency of ambient buildings"),
 		# (text of widget: lbl_UP)
 		("lbl_UP"                      , "text"    ): _("Scroll up"),
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Return"),
-		# (text of widget: fife_and_uh_team)
-		("fife_and_uh_team"            , "text"    ): _("The FIFE and Unknown Horizons development teams"),
+		# (helptext of widget: okButton)
+		("okButton"                    , "helptext"): _("Return"),
 		},
 
 	"ingamemenu.xml" : {
@@ -744,16 +779,20 @@ def set_translations():
 		("create_game_lbl"             , "text"    ): _("Create game:"),
 		# (text of widget: exit_to_mp_menu_lbl)
 		("exit_to_mp_menu_lbl"         , "text"    ): _("Back:"),
+		# (text of widget: gamename_lbl)
+		("gamename_lbl"                , "text"    ): _("Name of the game:"),
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Choose a map:"),
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Create game - Multiplayer"),
 		# (text of widget: mp_player_limit_lbl)
 		("mp_player_limit_lbl"         , "text"    ): _("Player limit:"),
-		# (tooltip of widget: create)
-		("create"                      , "tooltip" ): _("Create this new game"),
-		# (tooltip of widget: cancel)
-		("cancel"                      , "tooltip" ): _("Exit to multiplayer menu"),
+		# (helptext of widget: cancel)
+		("cancel"                      , "helptext"): _("Exit to multiplayer menu"),
+		# (helptext of widget: create)
+		("create"                      , "helptext"): _("Create this new game"),
+		# (helptext of widget: gamename_lbl)
+		("gamename_lbl"                , "helptext"): _("This will be displayed to other players so they recognise the game."),
 		},
 
 	"multiplayer_gamelobby.xml" : {
@@ -767,8 +806,8 @@ def set_translations():
 		("headline"                    , "text"    ): _("Gamelobby"),
 		# (text of widget: startmessage)
 		("startmessage"                , "text"    ): _("Game details:"),
-		# (tooltip of widget: cancel)
-		("cancel"                      , "tooltip" ): _("Exit gamelobby"),
+		# (helptext of widget: cancel)
+		("cancel"                      , "helptext"): _("Exit gamelobby"),
 		},
 
 	"multiplayermenu.xml" : {
@@ -784,21 +823,31 @@ def set_translations():
 		("headline_left"               , "text"    ): _("New game - Multiplayer"),
 		# (text of widget: join_game_lbl)
 		("join_game_lbl"               , "text"    ): _("Join game"),
+		# (text of widget: load_game_lbl)
+		("load_game_lbl"               , "text"    ): _("Load game:"),
 		# (text of widget: refr_gamelist_lbl)
 		("refr_gamelist_lbl"           , "text"    ): _("Refresh list:"),
-		# (tooltip of widget: create)
-		("create"                      , "tooltip" ): _("Create a new game"),
-		# (tooltip of widget: join)
-		("join"                        , "tooltip" ): _("Join the selected game"),
-		# (tooltip of widget: cancel)
-		("cancel"                      , "tooltip" ): _("Exit to main menu"),
-		# (tooltip of widget: refresh)
-		("refresh"                     , "tooltip" ): _("Refresh list of active games"),
+		# (helptext of widget: cancel)
+		("cancel"                      , "helptext"): _("Exit to main menu"),
+		# (helptext of widget: create)
+		("create"                      , "helptext"): _("Create a new game"),
+		# (helptext of widget: join)
+		("join"                        , "helptext"): _("Join the selected game"),
+		# (helptext of widget: load)
+		("load"                        , "helptext"): _("Load a saved game"),
 		},
 
 	"settings.xml" : {
+		# (text of widget: auto_unload_label)
+		("auto_unload_label"           , "text"    ): _("Auto-unload ship:"),
 		# (text of widget: autosave_interval_label)
 		("autosave_interval_label"     , "text"    ): _("Autosave interval in minutes:"),
+		# (text of widget: color_depth_label)
+		("color_depth_label"           , "text"    ): _("Color depth:"),
+		# (text of widget: debug_log_lbl)
+		("debug_log_lbl"               , "text"    ): _("Enable logging"),
+		# (text of widget: edge_scrolling_label)
+		("edge_scrolling_label"        , "text"    ): _("Scroll at map edge:"),
 		# (text of widget: effect_volume_label)
 		("effect_volume_label"         , "text"    ): _("Effects volume:"),
 		# (text of widget: headline_graphics)
@@ -815,8 +864,14 @@ def set_translations():
 		("headline_sound"              , "text"    ): _("Sound"),
 		# (text of widget: language_label)
 		("language_label"              , "text"    ): _("Select language:"),
+		# (text of widget: minimap_rotation_label)
+		("minimap_rotation_label"      , "text"    ): _("Rotate minimap with map:"),
+		# (text of widget: mouse_sensitivity_label)
+		("mouse_sensitivity_label"     , "text"    ): _("Mouse sensitivity:"),
 		# (text of widget: music_volume_label)
 		("music_volume_label"          , "text"    ): _("Music volume:"),
+		# (text of widget: network_port_lbl)
+		("network_port_lbl"            , "text"    ): _("Network port:"),
 		# (text of widget: number_of_autosaves_label)
 		("number_of_autosaves_label"   , "text"    ): _("Number of autosaves:"),
 		# (text of widget: number_of_quicksaves_label)
@@ -827,57 +882,51 @@ def set_translations():
 		("screen_resolution_label"     , "text"    ): _("Screen resolution:"),
 		# (text of widget: sound_enable_opt_text)
 		("sound_enable_opt_text"       , "text"    ): _("Enable sound:"),
-		# (tooltip of widget: okButton)
-		("okButton"                    , "tooltip" ): _("Apply"),
-		# (tooltip of widget: cancelButton)
-		("cancelButton"                , "tooltip" ): _("Return"),
-		# (tooltip of widget: defaultButton)
-		("defaultButton"               , "tooltip" ): _("Reset to default settings"),
-		# (text of widget: auto_unload_label)
-		("auto_unload_label"           , "text"    ): _("Auto-unload ship:"),
-		# (text of widget: color_depth_label)
-		("color_depth_label"           , "text"    ): _("Color depth:"),
-		# (text of widget: edge_scrolling_label)
-		("edge_scrolling_label"        , "text"    ): _("Scroll at map edge:"),
-		# (text of widget: minimap_rotation_label)
-		("minimap_rotation_label"      , "text"    ): _("Rotate minimap with map:"),
-		# (text of widget: mouse_sensitivity_label)
-		("mouse_sensitivity_label"     , "text"    ): _("Mouse sensitivity:"),
-		# (text of widget: network_port_lbl)
-		("network_port_lbl"            , "text"    ): _("Network port:"),
 		# (text of widget: uninterrupted_building_label)
 		("uninterrupted_building_label", "text"    ): _("Uninterrupted building:"),
 		# (text of widget: use_renderer_label)
 		("use_renderer_label"          , "text"    ): _("Used renderer:"),
-		# (tooltip of widget: auto_unload_label)
-		("auto_unload_label"           , "tooltip" ): _("Whether to unload the ship after founding a settlement"),
-		# (tooltip of widget: color_depth_label)
-		("color_depth_label"           , "tooltip" ): _("If set to 0, use the driver default"),
-		# (tooltip of widget: edge_scrolling_label)
-		("edge_scrolling_label"        , "tooltip" ): _("Whether to move the viewport when the mouse pointer is close to map edges"),
-		# (tooltip of widget: minimap_rotation_label)
-		("minimap_rotation_label"      , "tooltip" ): _("Whether to also rotate the minimap whenever the regular map is rotated"),
-		# (tooltip of widget: mouse_sensitivity_label)
-		("mouse_sensitivity_label"     , "tooltip" ): _("0 is default system settings"),
-		# (tooltip of widget: network_port_lbl)
-		("network_port_lbl"            , "tooltip" ): _("If set to 0, use the router default"),
-		# (tooltip of widget: uninterrupted_building_label)
-		("uninterrupted_building_label", "tooltip" ): _("When enabled, do not exit the build mode after successful construction"),
-		# (tooltip of widget: use_renderer_label)
-		("use_renderer_label"          , "tooltip" ): _("SDL is only meant as unsupported fallback and might cause problems!"),
+		# (helptext of widget: cancelButton)
+		("cancelButton"                , "helptext"): _("Return"),
+		# (helptext of widget: defaultButton)
+		("defaultButton"               , "helptext"): _("Reset to default settings"),
+		# (helptext of widget: okButton)
+		("okButton"                    , "helptext"): _("Apply"),
+		# (helptext of widget: auto_unload_label)
+		("auto_unload_label"           , "helptext"): _("Whether to unload the ship after founding a settlement"),
+		# (helptext of widget: color_depth_label)
+		("color_depth_label"           , "helptext"): _("If set to 0, use the driver default"),
+		# (helptext of widget: debug_log_lbl)
+		("debug_log_lbl"               , "helptext"): _("Whether to write debug information in the logging directory of your user directory"),
+		# (helptext of widget: edge_scrolling_label)
+		("edge_scrolling_label"        , "helptext"): _("Whether to move the viewport when the mouse pointer is close to map edges"),
+		# (helptext of widget: minimap_rotation_label)
+		("minimap_rotation_label"      , "helptext"): _("Whether to also rotate the minimap whenever the regular map is rotated"),
+		# (helptext of widget: mouse_sensitivity_label)
+		("mouse_sensitivity_label"     , "helptext"): _("0 is default system settings"),
+		# (helptext of widget: network_port_lbl)
+		("network_port_lbl"            , "helptext"): _("If set to 0, use the router default"),
+		# (helptext of widget: uninterrupted_building_label)
+		("uninterrupted_building_label", "helptext"): _("When enabled, do not exit the build mode after successful construction"),
+		# (helptext of widget: use_renderer_label)
+		("use_renderer_label"          , "helptext"): _("SDL is only meant as unsupported fallback and might cause problems!"),
 		},
 
 	"select_savegame.xml" : {
 		# (text of widget: enter_filename_label)
 		("enter_filename_label"        , "text"    ): _("Enter filename:"),
+		# (text of widget: gamename_lbl)
+		("gamename_lbl"                , "text"    ): _("Name of the game:"),
 		# (text of widget: headline_details_label) More text describing the savegame
 		("headline_details_label"      , "text"    ): _("Details:"),
 		# (text of widget: headline_saved_games_label)
 		("headline_saved_games_label"  , "text"    ): _("Your saved games:"),
-		# (tooltip of widget: cancelButton)
-		("cancelButton"                , "tooltip" ): _("Cancel"),
-		# (tooltip of widget: deleteButton)
-		("deleteButton"                , "tooltip" ): _("Delete selected savegame"),
+		# (helptext of widget: cancelButton)
+		("cancelButton"                , "helptext"): _("Cancel"),
+		# (helptext of widget: deleteButton)
+		("deleteButton"                , "helptext"): _("Delete selected savegame"),
+		# (helptext of widget: gamename_lbl)
+		("gamename_lbl"                , "helptext"): _("This will be displayed to other players so they recognise the game."),
 		},
 
 	"singleplayermenu.xml" : {
@@ -895,10 +944,10 @@ def set_translations():
 		("random"                      , "text"    ): _("Random map"),
 		# (text of widget: scenario)
 		("scenario"                    , "text"    ): _("Scenario"),
-		# (tooltip of widget: okay)
-		("okay"                        , "tooltip" ): _("Start game"),
-		# (tooltip of widget: cancel)
-		("cancel"                      , "tooltip" ): _("Exit to main menu"),
+		# (helptext of widget: cancel)
+		("cancel"                      , "helptext"): _("Exit to main menu"),
+		# (helptext of widget: okay)
+		("okay"                        , "helptext"): _("Start game"),
 		},
 
 	"sp_campaign.xml" : {
@@ -914,6 +963,8 @@ def set_translations():
 	"sp_random.xml" : {
 		# (text of widget: headline_map_settings_lbl)
 		("headline_map_settings_lbl"   , "text"    ): _("Map settings:"),
+		# (text of widget: seed_string_lbl)
+		("seed_string_lbl"             , "text"    ): _("Seed:"),
 		},
 
 	"sp_scenario.xml" : {
@@ -929,6 +980,8 @@ def set_translations():
 	"game_settings.xml" : {
 		# (text of widget: headline_game_settings_lbl)
 		("headline_game_settings_lbl"  , "text"    ): _("Game settings:"),
+		# (text of widget: lbl_disasters) Whether there should be disasters in the game.
+		("lbl_disasters"               , "text"    ): _("Disasters"),
 		# (text of widget: lbl_free_trader) Whether to create this kind of player in the game.
 		("lbl_free_trader"             , "text"    ): _("Free Trader"),
 		# (text of widget: lbl_pirates) Whether to create this kind of player in the game.

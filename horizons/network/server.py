@@ -30,6 +30,7 @@ enet = find_enet_module(client = False)
 
 MAX_PEERS = 4095
 CONNECTION_TIMEOUT = 500
+MINIMUM_PLAYERS = 2
 
 logging.basicConfig(format = '[%(asctime)-15s] [%(levelname)s] %(message)s',
 		level = logging.DEBUG)
@@ -107,7 +108,8 @@ class Server(object):
 		try:
 			self.host = enet.Host(enet.Address(self.hostname, self.port), MAX_PEERS, 0, 0, 0)
 		except (IOError, MemoryError):
-			raise network.NetworkException("Unable to create network structure. Maybe invalid or irresolvable server address.")
+			# these exceptions do not provide any information.
+			raise network.NetworkException("Unable to create network structure. Maybe invalid or irresolvable server address:")
 
 		logging.debug("Entering the main loop...")
 		while True:
@@ -218,10 +220,10 @@ class Server(object):
 
 		packet = None
 		try:
-			packet = packets.unserialize(event.packet.data)
-		except Exception:
-			logging.warning("[RECEIVE] Unknown packet from %s!" % (peer.address))
-			self.fatalerror(event.peer, "Unknown packet. Please check your game version")
+			packet = packets.unserialize(event.packet.data, True)
+		except Exception, e:
+			logging.warning("[RECEIVE] Unknown or malformed packet from %s: %s!" % (peer.address, e))
+			self.fatalerror(event.peer, "Unknown or malformed packet. Please check your game version")
 			return
 
 		# session id check
@@ -250,9 +252,20 @@ class Server(object):
 
 
 	def oncreategame(self, peer, packet):
-		if not len(packet.playername):
-			self.error(peer, "You must have a non empty name")
+		if not len(packet.clientversion):
+			self.error(peer, "Invalid client version")
 			return
+		if not len(packet.mapname):
+			self.error(peer, "You can't run a game with an empty mapname")
+			return
+		if packet.maxplayers < MINIMUM_PLAYERS:
+			self.error(peer, "You can't run a game with less than two players")
+			return
+		if not len(packet.playername):
+			self.error(peer, "Your player name cannot be empty")
+			return
+		if not len(packet.name):
+			packet.name = "Unnamed Game"
 		player = self.players[peer.data]
 		if player.game is not None:
 			self.error(peer, "You can't create a game while in another game")
@@ -289,8 +302,14 @@ class Server(object):
 
 
 	def onjoingame(self, peer, packet):
+		if len(packet.uuid) != 32:
+			self.error(peer, "Invalid game UUID")
+			return
+		if not len(packet.clientversion):
+			self.error(peer, "Invalid client version")
+			return
 		if not len(packet.playername):
-			self.error(peer, "You must have a non empty name")
+			self.error(peer, "Your player name cannot be empty")
 			return
 		player = self.players[peer.data]
 		if player.game is not None:
@@ -306,7 +325,7 @@ class Server(object):
 			game = _game
 			break
 		if game is None:
-			self.error(peer, "Unknown game")
+			self.error(peer, "Unknown game or game is running a different version")
 			return
 		if game.state is not Game.State.Open:
 			self.error(peer, "Game has already started. No more joining")
@@ -361,7 +380,7 @@ class Server(object):
 		logging.debug("[TERMINATE] [%s] (by %s)" % (game.uuid, player if player is not None else None))
 		for _player in game.players:
 			if _player.peer.state == enet.PEER_STATE_CONNECTED:
-				self.fatalerror(_player.peer, "I feel like a bad bunny but one player has terminated his game and this game is programmed to terminate the whole game now. Sorry :*(")
+				self.fatalerror(_player.peer, "I feel like a bad bunny but one player has terminated the game which currently for technical reasons means that the game cannot continue. Sorry :*(")
 		game.clear()
 		self.call_callbacks('deletegame', game)
 

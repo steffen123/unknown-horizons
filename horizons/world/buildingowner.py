@@ -126,7 +126,6 @@ class BuildingOwner(object):
 			# worst case: search all provider buildings
 			provider_list = self.provider_buildings
 		# filter out those that aren't in range
-		possible_providers = []
 		r2 = radiusrect.center
 		radius_squared = radiusrect.radius ** 2
 		for provider in provider_list:
@@ -135,12 +134,19 @@ class BuildingOwner(object):
 				#provider.position.distance_to_rect(radiusrect.center) <= radiusrect.radius:
 				r1 = provider.position
 				if ((max(r1.left - r2.right, 0, r2.left - r1.right) ** 2) + (max(r1.top - r2.bottom, 0, r2.top - r1.bottom) ** 2)) <= radius_squared:
-					possible_providers.append(provider)
-		return possible_providers
+					yield provider
 
 	def save(self, db):
 		for building in self.buildings:
 			building.save(db)
 
-
-
+	def end(self):
+		if self.buildings is not None:
+			# remove all buildings
+			# this iteration style is the most robust; sometimes the ai reacts to removals
+			# by building/tearing, effectively changing the list, therefore iterating over a
+			# copy would either miss instances or remove some twice.
+			while self.buildings:
+				self.buildings[-1].remove()
+		self.provider_buildings = None
+		self.buildings = None

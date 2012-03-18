@@ -19,23 +19,23 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+import os
 import random
 import tempfile
 import sys
-import shutil
 import re
 import string
 import copy
 
 from horizons.util import Circle, Rect, Point, DbReader
 from horizons.util.uhdbaccessor import read_savegame_template
-from horizons.constants import GROUND, PATHS
+from horizons.constants import GROUND
 
 # this is how a random island id looks like (used for creation)
 _random_island_id_template = "random:${creation_method}:${width}:${height}:${seed}"
 
 # you can check for a random island id with this:
-_random_island_id_regexp = r"random:([0-9]+):([0-9]+):([0-9]+):([\-]?[0-9]+)"
+_random_island_id_regexp = r"^random:([0-9]+):([0-9]+):([0-9]+):([\-]?[0-9]+)$"
 
 
 def is_random_island_id_string(id_string):
@@ -407,6 +407,10 @@ def create_random_island(id_string):
 	map_db("COMMIT")
 	return map_db
 
+def _simplify_seed(seed):
+	"""Return the simplified seed value. The goal of this is to make it easier for users to convey the seeds orally."""
+	return str(seed).lower().strip()
+
 def generate_map(seed, map_size, water_percent, max_island_size, preferred_island_size, island_size_deviation):
 	"""
 	Generates a random map.
@@ -419,9 +423,8 @@ def generate_map(seed, map_size, water_percent, max_island_size, preferred_islan
 	@param island_size_deviation: deviation of island side lengths
 	@return: filename of the SQLite database containing the map
 	"""
-
 	max_island_size = min(max_island_size, map_size)
-	rand = random.Random(seed)
+	rand = random.Random(_simplify_seed(seed))
 	min_island_size = 20 # minimum chosen island side length (the real size my be smaller)
 	min_island_separation = 3 + map_size / 100 # minimum distance between two islands
 	max_island_side_coefficient = 4 # maximum value of island's max(side length) / min(side length)
@@ -448,8 +451,7 @@ def generate_map(seed, map_size, water_percent, max_island_size, preferred_islan
 			rect = Rect.init_from_topleft_and_size(x, y, width, height)
 			blocked = False
 			for existing_island in islands:
-				assert rect.distance(existing_island) == existing_island.distance(rect)
-				if rect.distance(existing_island) < min_island_separation:
+				if existing_island.distance_to_rect(rect) < min_island_separation:
 					blocked = True
 					break
 			if not blocked:
@@ -458,7 +460,8 @@ def generate_map(seed, map_size, water_percent, max_island_size, preferred_islan
 				trial_number = 0
 				break
 
-	filename = tempfile.mkstemp()[1]
+	handle, filename = tempfile.mkstemp()
+	os.close(handle)
 	db = DbReader(filename)
 	read_savegame_template(db)
 
@@ -499,3 +502,7 @@ def generate_map_from_seed(seed):
 	"""
 
 	return generate_map(seed, 150, 50, 70, 70, 30)
+
+def generate_huge_map_from_seed(seed):
+	"""Same as generate_map_from_seed, but making it as big as it is still reasonable"""
+	return generate_map(seed, 250, 20, 70, 70, 5)

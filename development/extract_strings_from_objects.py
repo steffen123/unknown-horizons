@@ -20,6 +20,19 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+###############################################################################
+#
+# == I18N DEV USE CASES: CHEATSHEET ==
+#
+# ** Refer to  development/copy_pofiles.sh  for help with building or updating
+#    the translation files for Unknown Horizons.
+#
+###############################################################################
+#
+# THIS SCRIPT IS A HELPER SCRIPT. DO NOT INVOKE MANUALLY!
+#
+###############################################################################
+
 
 HEADER = '''# ###################################################
 # Copyright (C) 2012 The Unknown Horizons Team
@@ -42,18 +55,26 @@ HEADER = '''# ###################################################
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
-# ###################################################################
+###############################################################################
+#
+# == I18N DEV USE CASES: CHEATSHEET ==
+#
+# ** Refer to  development/copy_pofiles.sh  for help with building or updating
+#    the translation files for Unknown Horizons.
+#
+###############################################################################
+#
 # WARNING: This file is generated automagically.
 #          You need to update it to see changes to strings in-game.
 #          DO NOT MANUALLY UPDATE THIS FILE (by editing strings).
 #          The script to generate .pot templates calls the following:
 # ./development/extract_strings_from_objects.py  horizons/i18n/objecttranslations.py
-#          If you changed strings in code, you might just run this
-#          command as well.
+#
 # NOTE: In string-freeze mode (shortly before releases, usually
 #       announced in a meeting), updates to this file must not happen
 #       without permission of the responsible translation admin!
-# ###################################################################
+#
+###############################################################################
 
 from horizons.constants import VERSION
 
@@ -69,14 +90,14 @@ ROWINDENT = '\n\t\t'
 
 OBJECT_PATH = 'content/objects/'
 
-locations_to_translate = {
+locations_to_translate = [
 	OBJECT_PATH + 'buildings/',
 	OBJECT_PATH + 'units/ships/',
-	}
+	]
 
-files_to_skip = {
+files_to_skip = [
 	'usablefisher.yaml',
-	}
+	]
 
 import os
 import sys
@@ -96,12 +117,21 @@ def list_all_files():
 def content_from_file(filename):
 	parsed = load(file(filename, 'r'), Loader=Loader)
 	object_strings = []
+	if not parsed:
+		return ''
+	def add_line(value, component, filename):
+		if value.startswith('_ '):
+			text = '_("{value}")'.format(value=value[2:])
+			comment = '%s of %s' %(component, filename.rsplit('.yaml')[0].split(OBJECT_PATH)[1].replace('/',':'))
+			object_strings.append('# %s' %comment + ROWINDENT + '%-30s: %s' % (('"%s"') % component, text))
+
 	for component, value in parsed.iteritems():
 		if isinstance(value, str) or isinstance(value, unicode):
-			if value.startswith('_ '):
-				text = '_("{value}")'.format(value=value[2:])
-				comment = '%s of %s' %(component, filename.rsplit('.yaml')[0].split(OBJECT_PATH)[1].replace('/',':'))
-				object_strings.append('# %s' %comment + ROWINDENT + '%-30s: %s' % (('"%s"') % component, text))
+			add_line(value, component, filename)
+		elif isinstance(value, dict):
+			for key, subvalue in value.iteritems():
+				if isinstance(subvalue, str) or isinstance(subvalue, unicode):
+					add_line(subvalue, component + "_" + str(key), filename)
 
 	strings = sorted(object_strings)
 

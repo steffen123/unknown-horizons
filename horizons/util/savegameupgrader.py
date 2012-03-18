@@ -20,8 +20,9 @@
 # ###################################################
 
 import os
-import shutil
 import os.path
+import json
+import shutil
 import tempfile
 
 from horizons.util.python import decorators
@@ -37,20 +38,62 @@ class SavegameUpgrader(object):
 		self.using_temp = False
 		self.final_path = None
 
-	def _upgrade_to_rev44(self, db):
-		# add trade history table
-		db("CREATE TABLE IF NOT EXISTS \"trade_history\" (\"settlement\" INTEGER NOT NULL," \
-		     "\"tick\" INTEGER NOT NULL, \"player\" INTEGER NOT NULL, " \
-		     "\"resource_id\" INTEGER NOT NULL, \"amount\" INTEGER NOT NULL, \"gold\" INTEGER NOT NULL)")
-
-	def _upgrade_to_rev45(self, db):
-		# fix production queue table
-		db("DROP TABLE production_queue")
-		db("CREATE TABLE \"production_queue\" (object INTEGER NOT NULL, position INTEGER NOT NULL, production_line_id INTEGER NOT NULL)")
-
 	def _upgrade_to_rev49(self, db):
 		db("CREATE TABLE \"resource_overview_bar\" (object INTEGER NOT NULL, position INTEGER NOT NULL, resource INTEGER NOT NULL)")
 
+	def _upgrade_to_rev50(self, db):
+		db("UPDATE stance set stance = \"hold_ground_stance\" where stance =\"hold_ground\"")
+		db("UPDATE stance set stance = \"none_stance\" where stance =\"none\"")
+		db("UPDATE stance set stance = \"flee_stance\" where stance =\"flee_stance\"")
+		db("UPDATE stance set stance = \"aggressive_stance\" where stance =\"aggressive\"")
+
+	def _upgrade_to_rev51(self, db):
+		# add fire slot to settlers. Use direct numbers since only these work and they must never change.
+		for (settler_id, ) in db("SELECT rowid FROM building WHERE type = ?", 3):
+			db("INSERT INTO storage_slot_limit(object, slot, value) VALUES(?, ?, ?)",
+			   settler_id, 42, 1)
+
+	def _upgrade_to_rev52(self, db):
+		# create empty disaster tables
+		db('CREATE TABLE "disaster" ( type STRING NOT NULL, settlement INTEGER NOT NULL, remaining_ticks_expand INTEGER NOT NULL)')
+		db('CREATE TABLE "fire_disaster" ( disaster INTEGER NOT NULL, building INTEGER NOT NULL, remaining_ticks_havoc INTEGER NOT NULL )')
+		db('CREATE TABLE "disaster_manager" ( remaining_ticks INTEGER NOT NULL )')
+		db('INSERT INTO "disaster_manager" VALUES(1)')
+
+	def _upgrade_to_rev53(self, db):
+		# convert old logbook (heading, message) tuples to new syntax, modify logbook table layout
+		old_entries = db("SELECT heading, message FROM logbook")
+		db('DROP TABLE logbook')
+		db('CREATE TABLE logbook ( widgets string )')
+		widgets = []
+		for heading, message in old_entries:
+			add = []
+			add.append(['Headline', heading])
+			add.append(['Image', "content/gui/images/background/hr.png"])
+			add.append(['Label', message])
+			widgets.append(add)
+		db("INSERT INTO logbook(widgets) VALUES(?)", json.dumps(widgets))
+
+	def _upgrade_to_rev54(self, db):
+		for (settlement,) in db("SELECT DISTINCT settlement FROM settlement_level_properties WHERE level = ?", 0):
+			db("INSERT INTO settlement_level_properties VALUES(?, 3, 0, 1)", settlement)
+
+	def _upgrade_to_rev55(self, db):
+		# The upgrade system has been mishandled, this upgrade tries to fix
+		# as much as possible. It's partly brute force and might not work every
+		# time, however the savegames are in an undefined state, so recovery is hard
+
+		# make anything inflamable, the code should be able to handle it
+		for (obj, ) in db("SELECT rowid FROM building where type != 8"):
+			db("INSERT INTO storage_slot_limit (object, slot, value) VALUES (?, ?, ?)",
+			   obj, 99, 1)
+
+		# make farm be able to store grain and stuff
+		for (obj, ) in db("SELECT rowid FROM building where type = 20"):
+			db("INSERT INTO storage_slot_limit (object, slot, value) VALUES (?, ?, ?)",
+			   obj, 43, 6)
+			db("INSERT INTO storage_slot_limit (object, slot, value) VALUES (?, ?, ?)",
+			   obj, 42, 6)
 
 	def _upgrade(self):
 		# fix import loop
@@ -67,15 +110,24 @@ class SavegameUpgrader(object):
 			os.close(handle)
 			shutil.copyfile(self.original_path, self.final_path)
 			db = DbReader(self.final_path)
+			db('BEGIN TRANSACTION')
 
-			if rev <= 44:
-				self._upgrade_to_rev44(db)
-			if rev <= 45:
-				self._upgrade_to_rev45(db)
 			if rev < 49:
 				self._upgrade_to_rev49(db)
+			if rev < 50:
+				self._upgrade_to_rev50(db)
+			if rev < 51:
+				self._upgrade_to_rev51(db)
+			if rev < 52:
+				self._upgrade_to_rev52(db)
+			if rev < 53:
+				self._upgrade_to_rev53(db)
+			if rev < 54:
+				self._upgrade_to_rev54(db)
+			if rev < 55:
+				self._upgrade_to_rev55(db)
 
-
+			db('COMMIT')
 			db.close()
 
 	def get_path(self):

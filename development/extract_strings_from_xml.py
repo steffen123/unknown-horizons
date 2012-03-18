@@ -20,6 +20,19 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+###############################################################################
+#
+# == I18N DEV USE CASES: CHEATSHEET ==
+#
+# ** Refer to  development/copy_pofiles.sh  for help with building or updating
+#    the translation files for Unknown Horizons.
+#
+###############################################################################
+#
+# THIS SCRIPT IS A HELPER SCRIPT. DO NOT INVOKE MANUALLY!
+#
+###############################################################################
+
 
 header = '''# ###################################################
 # Copyright (C) 2012 The Unknown Horizons Team
@@ -42,18 +55,26 @@ header = '''# ###################################################
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
-# ###################################################################
+###############################################################################
+#
+# == I18N DEV USE CASES: CHEATSHEET ==
+#
+# ** Refer to  development/copy_pofiles.sh  for help with building or updating
+#    the translation files for Unknown Horizons.
+#
+###############################################################################
+#
 # WARNING: This file is generated automagically.
 #          You need to update it to see changes to strings in-game.
 #          DO NOT MANUALLY UPDATE THIS FILE (by editing strings).
 #          The script to generate .pot templates calls the following:
 # ./development/extract_strings_from_xml.py  horizons/i18n/guitranslations.py
-#          If you changed strings in code, you might just run this
-#          command as well.
+#
 # NOTE: In string-freeze mode (shortly before releases, usually
 #       announced in a meeting), updates to this file must not happen
 #       without permission of the responsible translation admin!
-# ###################################################################
+#
+###############################################################################
 
 from horizons.constants import VERSION
 
@@ -67,7 +88,7 @@ def set_translations():
 FOOTER = '''\n\t}\n'''
 ROWINDENT = '\n\t\t'
 
-files_to_skip = {
+files_to_skip = [
 	'call_for_support.xml',
 	'credits0.xml',
 	'credits1.xml',
@@ -76,7 +97,7 @@ files_to_skip = {
 	'credits4.xml',
 	'stringpreviewwidget.xml',
 	'startup_error_popup.xml'
-	}
+	]
 
 import xml.dom.minidom
 import os
@@ -95,7 +116,7 @@ def list_all_files():
 				result.append('%s/%s' % (entry[0], filename))
 	return sorted(result)
 
-def content_from_element(element_name, parse_tree, text_name='text'):
+def content_from_element(element_name, parse_tree, text_name):
 
 	def _set_default_name(element, default_name):
 		element.setAttribute('name', default_name)
@@ -132,20 +153,21 @@ def content_from_file(filename):
 	print '@ %s' % filename
 	parsed = xml.dom.minidom.parse(filename)
 
-	strings = content_from_element('Label', parsed) + \
-		content_from_element('Button', parsed) + \
-		content_from_element('CheckBox', parsed) + \
-		content_from_element('RadioButton', parsed) + \
-		content_from_element('Window', parsed, 'title') + \
-		content_from_element('OkButton', parsed, 'tooltip') + \
-		content_from_element('CancelButton', parsed, 'tooltip') + \
-		content_from_element('DeleteButton', parsed, 'tooltip') + \
-		content_from_element('TooltipButton', parsed, 'tooltip') + \
-		content_from_element('TooltipIcon', parsed, 'tooltip') + \
-		content_from_element('TooltipLabel', parsed, 'text') + \
-		content_from_element('TooltipLabel', parsed, 'tooltip') + \
-		content_from_element('TooltipProgressBar', parsed, 'tooltip') + \
-		content_from_element('ToggleImageButton', parsed, 'tooltip')
+	strings = \
+		content_from_element('Button', parsed, 'text') + \
+		content_from_element('CheckBox', parsed, 'text') + \
+		content_from_element('Label', parsed, 'text') + \
+		content_from_element('RadioButton', parsed, 'text') + \
+\
+		content_from_element('CancelButton', parsed, 'helptext') + \
+		content_from_element('DeleteButton', parsed, 'helptext') + \
+		content_from_element('OkButton', parsed, 'helptext') + \
+\
+		content_from_element('Button', parsed, 'helptext') + \
+		content_from_element('Icon', parsed, 'helptext') + \
+		content_from_element('Label', parsed, 'helptext') + \
+		content_from_element('ProgressBar', parsed, 'helptext') + \
+		content_from_element('ToggleImageButton', parsed, 'helptext')
 
 	if len(strings):
 		printname = filename.rsplit("/",1)[1]

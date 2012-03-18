@@ -24,17 +24,19 @@ import logging
 from fife import fife
 
 from horizons.world.units.movingobject import MovingObject
-from horizons.util import Point, WorldObject, WeakMethod, decorators
+from horizons.util import Point, WorldObject, WeakMethod, decorators, Callback
 from horizons.constants import LAYERS
 from horizons.world.component.healthcomponent import HealthComponent
 from horizons.world.component.storagecomponent import StorageComponent
+from horizons.extscheduler import ExtScheduler
 
 class Unit(MovingObject):
 	log = logging.getLogger("world.units")
 	is_unit = True
 	is_ship = False
 	health_bar_y = -30
-	is_selectable = False
+
+	AUTOMATIC_HEALTH_DISPLAY_TIMEOUT = 10 # show health for 10 sec after damage has been taken
 
 	def __init__(self, x, y, owner=None, **kwargs):
 		super(Unit, self).__init__(x=x, y=y, **kwargs)
@@ -42,7 +44,8 @@ class Unit(MovingObject):
 
 	def __init(self, x, y, owner):
 		self.owner = owner
-		class Tmp(fife.InstanceActionListener): pass
+		class Tmp(fife.InstanceActionListener):
+			pass
 		self.InstanceActionListener = Tmp()
 		self.InstanceActionListener.onInstanceActionFinished = \
 				WeakMethod(self.onInstanceActionFinished)
@@ -58,6 +61,11 @@ class Unit(MovingObject):
 		self._instance.addActionListener(self.InstanceActionListener)
 
 		self.loading_area = self.position
+
+		self._health_displayed = False
+
+		if self.has_component(HealthComponent):
+			self.get_component(HealthComponent).add_damage_dealt_listener(self._on_damage)
 
 	def remove(self):
 		self.log.debug("Unit.remove for %s started", self)
@@ -82,15 +90,39 @@ class Unit(MovingObject):
 			self.act(self._action, location, True)
 		self.session.view.cam.refresh()
 
-	def draw_health(self):
+	def _on_damage(self, caller=None):
+		"""Called when health has changed"""
+		if not self._instance: # dead
+			# it is sometimes hard to avoid this being called after the unit has died,
+			# e.g. when it's part of a list of changelisteners, and one of the listeners executed before kills the unit
+			return
+		health_was_displayed_before = self._health_displayed
+		# always update
+		self.draw_health()
+		if health_was_displayed_before:
+			return # don't schedule removal
+		# remember that it has been drawn automatically
+		self._last_draw_health_call_on_damage = True
+		# remove later (but only in case there's no manual interference)
+		ExtScheduler().add_new_object(Callback(self.draw_health, auto_remove=True), self, self.__class__.AUTOMATIC_HEALTH_DISPLAY_TIMEOUT)
+
+	def draw_health(self, remove_only=False, auto_remove=False):
 		"""Draws the units current health as a healthbar over the unit."""
 		if not self.has_component(HealthComponent):
 			return
+		render_name = "health_" + str(self.worldid)
+		renderer = self.session.view.renderer['GenericRenderer']
+		renderer.removeAll(render_name)
+		if remove_only or (auto_remove and not self._last_draw_health_call_on_damage):
+			# only remove on auto_remove if this health was actually displayed as reacton to _on_damage
+			# else we might remove something that the user still wants
+			self._health_displayed = False
+			return
+		self._last_draw_health_call_on_damage = False
+		self._health_displayed = True
 		health_component = self.get_component(HealthComponent)
 		health = health_component.health
 		max_health = health_component.max_health
-		renderer = self.session.view.renderer['GenericRenderer']
-		renderer.removeAll("health_" + str(self.worldid))
 		zoom = self.session.view.get_zoom()
 		height = int(5 * zoom)
 		width = int(50 * zoom)
@@ -102,14 +134,14 @@ class Unit(MovingObject):
 		mid_node_down = fife.RendererNode(self._instance, relative_dn)
 
 		if health != 0: # draw healthy part of health bar
-			renderer.addQuad("health_" + str(self.worldid), \
+			renderer.addQuad(render_name,
 			                fife.RendererNode(self._instance, fife.Point(-width/2, y_pos - height)), \
 			                fife.RendererNode(self._instance, fife.Point(-width/2, y_pos)), \
 			                mid_node_down, \
 			                mid_node_up, \
 			                0, 255, 0)
 		if health != max_health: # draw damaged part
-			renderer.addQuad("health_" + str(self.worldid),
+			renderer.addQuad(render_name,
 			                 mid_node_up, \
 			                 mid_node_down, \
 			                 fife.RendererNode(self._instance, fife.Point(width/2, y_pos)), \
@@ -197,11 +229,6 @@ class Unit(MovingObject):
 	@property
 	def classname(self):
 		return self.session.db.get_unit_type_name(self.id)
-
-	@property
-	def name(self):
-		# this doesn't inherit properly from IngameType
-		return self._name
 
 	def __str__(self): # debug
 		return '%s(id=%s;worldid=%s)' % (self.name, self.id, self.worldid if hasattr(self, 'worldid') else 'none')

@@ -56,7 +56,7 @@ class Production(ChangeListener):
 
 	## INIT/DESTRUCT
 	def __init__(self, inventory, owner_inventory, prod_id, prod_data, auto_start=True, \
-	             start_finished=False, **kwargs):
+	             start_finished=False, load=False, **kwargs):
 		super(Production, self).__init__(**kwargs)
 		self._state_history = deque()
 		self.prod_id = prod_id
@@ -65,11 +65,13 @@ class Production(ChangeListener):
 		self.__start_finished = start_finished
 		self.__init(inventory, owner_inventory, prod_id, prod_data, PRODUCTION.STATES.none, Scheduler().cur_tick)
 
-		self._add_listeners()
+		if not load and not start_finished:
+			self._add_listeners()
 
 	def start(self):
 		if self.__start_finished:
 			self._give_produced_res()
+			self._add_listeners()
 		if self.__auto_start:
 			self._check_inventory()
 
@@ -114,14 +116,14 @@ class Production(ChangeListener):
 				 self.prod_id, translated_tick, state, owner_id)
 
 	def load(self, db, worldid):
-		# Worldid is the world id of the producer component instance calling this
+		# NOTE: __init__ must have been called with load=True
+		# worldid is the world id of the producer component instance calling this
 		super(Production, self).load(db, worldid)
 
 		db_data = db.get_production_by_id_and_owner(self.prod_id, worldid)
 		self._creation_tick = db_data[5]
 		self._state = PRODUCTION.STATES[db_data[0]]
 		self._pause_old_state = None if db_data[4] is None else PRODUCTION.STATES[db_data[4]]
-		self._remove_listeners()
 		if self._state == PRODUCTION.STATES.paused:
 			self._pause_remaining_ticks = db_data[3]
 		elif self._state == PRODUCTION.STATES.producing:
@@ -392,7 +394,7 @@ class Production(ChangeListener):
 	def _give_produced_res(self):
 		"""Put produces goods to the inventory"""
 		for res, amount in self._prod_line.produced_res.iteritems():
-			ret = self.inventory.alter(res, amount)
+			self.inventory.alter(res, amount)
 
 	def _check_available_res(self):
 		"""Checks if all required resources are there.
@@ -426,16 +428,13 @@ class Production(ChangeListener):
 
 class ChangingProduction(Production):
 	"""Same as Production, but can changes properties of the production line"""
-	def _create_production_line(self, prod_line_id):
-		"""Returns a changeable production line instance"""
-		return ProductionLine(prod_line_id)
 
 	def save(self, db, owner_id):
 		super(ChangingProduction, self).save(db, owner_id)
 		self._prod_line.save(db, owner_id)
 
-	def _load(self, db, worldid):
-		super(ChangingProduction, self)._load(db, worldid)
+	def load(self, db, worldid):
+		super(ChangingProduction, self).load(db, worldid)
 		self._prod_line.load(db, worldid)
 
 
@@ -483,7 +482,7 @@ class ProgressProduction(Production):
 		# TODO
 		pass
 
-	def _load(self, db, worldid):
+	def load(self, db, worldid):
 		super(ProgressProduction, self).load(db, worldid)
 		self.__init()
 		# TODO

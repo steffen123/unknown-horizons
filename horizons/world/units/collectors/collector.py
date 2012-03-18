@@ -26,7 +26,6 @@ from horizons.scheduler import Scheduler
 
 from horizons.world.pathfinding import PathBlockedError
 from horizons.util import WorldObject, decorators, Callback
-from horizons.util.worldobject import WorldObjectNotFound
 from horizons.ext.enum import Enum
 from horizons.world.units.unit import Unit
 from horizons.constants import COLLECTORS
@@ -162,8 +161,18 @@ class Collector(Unit):
 			# which might not have been loaded
 			self.job = Job(job_db[0], job_db[1], job_db[2])
 
+		def fix_job_object():
+			# resolve worldid to object later
+			if self.job:
+				self.job.object = WorldObject.get_object_by_id( self.job.object )
+
 		# apply state when job object is loaded for sure
-		Scheduler().add_new_object(Callback(self.apply_state, self.state, remaining_ticks), self, run_in=0)
+		Scheduler().add_new_object(
+		  Callback.ChainedCallbacks(
+		    fix_job_object,
+		  	Callback(self.apply_state, self.state, remaining_ticks)),
+		    self, run_in=0
+		)
 
 	def apply_state(self, state, remaining_ticks = None):
 		"""Takes actions to set collector to a state. Useful after loading.
@@ -224,12 +233,12 @@ class Collector(Unit):
 		"""Executes the necessary actions to begin a new job"""
 		self.job.object.add_incoming_collector(self)
 
-	@decorators.cachedmethod
+	#@decorators.cachedmethod TODO: replace this with a version that doesn't leak
 	def check_possible_job_target(self, target):
 		"""Checks our if we "are allowed" and able to pick up from the target"""
 		# Discard building if it works for same inventory (happens when both are storage buildings
 		# or home_building is checked out)
-		if target.get_component(StorageComponent).inventory == self.get_home_inventory():
+		if target.get_component(StorageComponent).inventory is self.get_home_inventory():
 			#self.log.debug("nojob: same inventory")
 			return False
 
@@ -338,7 +347,7 @@ class Collector(Unit):
 		if self.has_component(AmbientSoundComponent):
 			am_comp = self.get_component(AmbientSoundComponent)
 			if len(am_comp.soundfiles) > 0:
-				am_comp.play_ambient(am_comp.soundfiles[0], looping=False)
+				am_comp.play_ambient(am_comp.soundfiles[0], position=self.position)
 		self.state = self.states.working
 
 	def finish_working(self):
@@ -374,16 +383,11 @@ class Collector(Unit):
 		assert remnant == 0, "%s couldn't give all of res %s; remnant: %s; inventory: %s" % \
 		       (self, res, remnant, self.get_component(StorageComponent).inventory)
 
-	""" unused for now
-	def reroute(self):
-		""Reroutes the collector to a different job.
-		Can be called the current job can't be executed any more""
-		raise NotImplementedError
-	"""
+	# unused reroute code removed in 2aef7bba77536da333360566467d9a2f08d38cab
 
 	def end_job(self):
 		"""Contrary to setup_new_job"""
-		# he finished the job now
+		# the job now is finished now
 		# before the new job can begin this will be executed
 		self.log.debug("%s end_job - waiting for new search_job", self)
 		if self.start_hidden:
@@ -444,10 +448,7 @@ class Job(object):
 		# the collector actually got at the target, which might be 0. yet for new jobs
 		# amount > 0 is a necessary precondition.
 
-		if isinstance(obj, int):
-			self._obj_id = obj
-		else:
-			self._object = obj
+		self.object = obj
 		self.res = res
 		self.amount = amount
 
@@ -457,16 +458,6 @@ class Job(object):
 
 		# this is rather a dummy for now
 		self.rating = amount
-
-	@property
-	def object(self):
-		try:
-			return self._object
-		except AttributeError:
-			try:
-				return WorldObject.get_object_by_id(self._obj_id)
-			except WorldObjectNotFound:
-				return None
 
 	def __str__(self):
 		return "Job(res: %i amount: %i)" % (self.res, self.amount)

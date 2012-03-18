@@ -25,6 +25,7 @@ from horizons.entities import Entities
 from horizons.scheduler import Scheduler
 
 from horizons.util import WorldObject, Point, Rect, Circle, DbReader, random_map, BuildingIndexer
+from horizons.util.messaging.message import SettlementRangeChanged
 from settlement import Settlement
 from horizons.world.pathfinding.pathnodes import IslandPathNodes
 from horizons.constants import BUILDINGS, RES, UNITS
@@ -33,16 +34,16 @@ from horizons.world.buildingowner import BuildingOwner
 from horizons.gui.widgets.minimap import Minimap
 
 class Island(BuildingOwner, WorldObject):
-	"""The Island class represents an Island by keeping a list of all instances on the map,
-	that belong to the island. The island variable is also set on every instance that belongs
-	to an island, making it easy to determine to which island the instance belongs, when
-	selected.
-	An Island instance is created at map creation, when all tiles are added to the map.
+	"""The Island class represents an island. It contains a list of all things on the map
+	that belong to the island. This comprises ground tiles as well as buildings,
+	nature objects (which are buildings) and units.
+	All those objects also have a reference to the island, making it easy to determine to which island the instance belongs.
+	An Island instance is created during map creation, when all tiles are added to the map.
 	@param origin: Point instance - Position of the (0, 0) ground tile.
 	@param filename: file from which the island is loaded.
 
 	Each island holds some important attributes:
-	* grounds - All grounds that belong to the island are referenced here.
+	* grounds - All ground tiles that belong to the island are referenced here.
 	* grounds_map -  a dictionary that binds tuples of coordinates with a reference to the tile:
 	                  { (x, y): tileref, ...}
 					  This is important for pathfinding and quick tile fetching.
@@ -57,6 +58,7 @@ class Island(BuildingOwner, WorldObject):
 	function is not called. Rather the load function is called. So everything that new
 	classes and loaded classes share to initialize, comes into the __init() function.
 	This is the common way of doing this in Unknown Horizons, so better get used to it :)
+	NOTE: The components work a bit different, but this code here is mostly not component oriented.
 
 	To continue hacking, check out the __init() function now.
 	"""
@@ -109,6 +111,7 @@ class Island(BuildingOwner, WorldObject):
 		Load the actual island from a file
 		@param origin: Point
 		@param filename: String, filename of island db or random map id
+		@param preview: flag, map preview mode
 		"""
 		self.file = filename
 		self.origin = origin
@@ -146,14 +149,15 @@ class Island(BuildingOwner, WorldObject):
 		max_y = max(zip(*self.ground_map.keys())[1])
 		self.position = Rect.init_from_borders(min_x, min_y, max_x, max_y)
 
-		if not preview:
+		if not preview: # this isn't needed for previews, but it is in actual games
 			self.path_nodes = IslandPathNodes(self)
 
 			# repopulate wild animals every 2 mins if they die out.
 			Scheduler().add_new_object(self.check_wild_animal_population, self, Scheduler().get_ticks(120), -1)
 
 		"""TUTORIAL:
-		To continue hacking, you should now take off to the real fun stuff and check out horizons/world/building/__init__.py.
+		The next step will be an overview of the component system, which you will need
+		to understand in order to see how our actual game object (buildings, units) work. Please proceed to horizons/world/componentholder.py
 		"""
 
 	def save(self, db):
@@ -241,6 +245,7 @@ class Island(BuildingOwner, WorldObject):
 		@param radius:
 		@param settlement:
 		"""
+		settlement_tiles_changed = []
 		for coord in position.get_radius_coordinates(radius, include_self=True):
 			tile = self.get_tile_tuple(coord)
 			if tile is not None:
@@ -251,6 +256,7 @@ class Island(BuildingOwner, WorldObject):
 					settlement.ground_map[coord] = tile
 					Minimap.update(coord)
 					self._register_change(coord[0], coord[1])
+					settlement_tiles_changed.append(tile)
 
 					# notify all AI players when land ownership changes
 					for player in self.session.world.players:
@@ -265,6 +271,9 @@ class Island(BuildingOwner, WorldObject):
 					building.settlement = settlement
 					building.owner = settlement.owner
 					settlement.add_building(building)
+
+		if settlement_tiles_changed:
+			self.session.message_bus.broadcast(SettlementRangeChanged(settlement, settlement_tiles_changed))
 
 
 	def add_building(self, building, player, load=False):
@@ -399,3 +408,16 @@ class Island(BuildingOwner, WorldObject):
 					# building area with origin at coords affected
 					if coords in building_areas:
 						building_areas[coords] = self.last_change_id
+
+	def end(self):
+		# NOTE: killing animals before buildings is an optimisation, else they would
+		# keep searching for new trees every time a tree is torn down.
+		for wild_animal in (wild_animal for wild_animal in self.wild_animals):
+			wild_animal.remove()
+		super(Island, self).end()
+		for settlement in self.settlements:
+			settlement.end()
+		self.wild_animals = None
+		self.ground_map = None
+		self.path_nodes = None
+		self.building_indexers = None

@@ -32,6 +32,7 @@ from horizons.ai.aiplayer.goal.depositcoverage import ClayDepositCoverageGoal, M
 from horizons.ai.aiplayer.goal.enlargecollectorarea import EnlargeCollectorAreaGoal
 from horizons.ai.aiplayer.goal.feederchaingoal import FeederFoodGoal, FeederTextileGoal, FeederLiquorGoal, \
 	FeederTobaccoProductsGoal, FeederSaltGoal
+from horizons.ai.aiplayer.goal.firestation import FireStationGoal
 from horizons.ai.aiplayer.goal.foundfeederisland import FoundFeederIslandGoal
 from horizons.ai.aiplayer.goal.improvecollectorcoverage import ImproveCollectorCoverageGoal
 from horizons.ai.aiplayer.goal.productionchaingoal import FaithGoal, TextileGoal, BricksGoal, \
@@ -139,6 +140,7 @@ class SettlementManager(WorldObject):
 			self._goals.append(ToolsGoal(self))
 			self._goals.append(TentGoal(self))
 			self._goals.append(TradingShipGoal(self))
+			self._goals.append(FireStationGoal(self))
 
 	def save(self, db):
 		super(SettlementManager, self).save(db)
@@ -209,7 +211,7 @@ class SettlementManager(WorldObject):
 		if self.village_builder.tent_queue:
 			return False
 		settler_houses = 0
-		residences = self.settlement.get_buildings_by_id(BUILDINGS.RESIDENTIAL_CLASS)
+		residences = self.settlement.buildings_by_id.get(BUILDINGS.RESIDENTIAL_CLASS, [])
 		for building in residences:
 			if building.level == SETTLER.SETTLER_LEVEL:
 				settler_houses += 1
@@ -240,7 +242,7 @@ class SettlementManager(WorldObject):
 			elif resource_id == RES.LIQUOR_ID:
 				total = self.production_chain[RES.GET_TOGETHER_ID].get_ratio(RES.LIQUOR_ID) * self.get_resource_production_requirement(RES.GET_TOGETHER_ID)
 			else:
-				for residence in self.settlement.get_buildings_by_id(BUILDINGS.RESIDENTIAL_CLASS):
+				for residence in self.settlement.buildings_by_id.get(BUILDINGS.RESIDENTIAL_CLASS, []):
 					for production in residence.get_component(Producer).get_productions():
 						production_line = production._prod_line
 						if resource_id in production_line.consumed_res:
@@ -260,7 +262,7 @@ class SettlementManager(WorldObject):
 		"""
 
 		num_upgrading = 0
-		for building in self.settlement.get_buildings_by_id(BUILDINGS.RESIDENTIAL_CLASS):
+		for building in self.settlement.buildings_by_id.get(BUILDINGS.RESIDENTIAL_CLASS, []):
 			if building.level == level:
 				upgrade_production = building._get_upgrade_production()
 				if upgrade_production is not None and not upgrade_production.is_paused():
@@ -269,11 +271,11 @@ class SettlementManager(WorldObject):
 						return False
 
 		upgraded_any = False
-		for building in self.settlement.get_buildings_by_id(BUILDINGS.RESIDENTIAL_CLASS):
+		for building in self.settlement.buildings_by_id.get(BUILDINGS.RESIDENTIAL_CLASS, []):
 			if building.level == level:
 				upgrade_production = building._get_upgrade_production()
 				if upgrade_production is not None and upgrade_production.is_paused():
-					ToggleActive(building, upgrade_production).execute(self.land_manager.session)
+					ToggleActive(building.get_component(Producer), upgrade_production).execute(self.land_manager.session)
 					num_upgrading += 1
 					upgraded_any = True
 					if num_upgrading >= limit:

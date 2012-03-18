@@ -23,6 +23,7 @@ import operator
 import logging
 
 from horizons.timer import Timer
+from horizons.scheduler import Scheduler
 from horizons.util import WorldObject
 from horizons.util.living import LivingObject
 from horizons.command.building import Build
@@ -37,10 +38,10 @@ class SPManager(LivingObject):
 		self.session = session
 		self.commands = []
 
-	def execute(self, command, local = False):
+	def execute(self, command, local=False):
 		"""Executes a command
 		@param command: Command the command to be executed
-		@param local: not used in singleplayer manager
+		@param local: Whether to only execute command here (doesn't make sense in singleplayer
 		"""
 		# if we are in demo playback mode, every incoming command has to be thrown away.
 		if len(self.commands) > 0:
@@ -52,17 +53,6 @@ class SPManager(LivingObject):
 	def load(self, db):
 		pass
 
-	def tick(self, tick):
-		remove = []
-		for cmd in self.commands:
-			if tick == cmd[0]:
-				cmd[2](issuer = cmd[1])
-				remove.append(cmd)
-		for cmd in remove:
-			self.commands.remove(cmd)
-		if len(self.commands) == 0:
-			self.session.timer.remove_call(self.tick)
-
 	def end(self):
 		self.commands = None
 		super(SPManager, self).end()
@@ -71,10 +61,11 @@ class MPManager(LivingObject):
 	"""Handler for commands.
 	Initiates sending commands over the network for multiplayer games and their correct
 	execution time and is also responsible for handling lags"""
-	log =  logging.getLogger("mpmanager")
+	log = logging.getLogger("mpmanager")
+	command_log = logging.getLogger("mpmanager.commands") # command executions
 	EXECUTIONDELAY = 4
-	HASHDELAY = 8
-	HASH_EVAL_DISTANCE = 8
+	HASHDELAY = 4
+	HASH_EVAL_DISTANCE = 2 # interval, check hash every nth tick
 
 	def __init__(self, session, networkinterface):
 		"""Initialize the Multiplayer Manager"""
@@ -145,7 +136,7 @@ class MPManager(LivingObject):
 
 		# decide if tick can be calculated
 		# in the first few ticks, no data is available
-		if self.commandsmanager.is_tick_ready(tick) or tick < self.EXECUTIONDELAY:
+		if self.commandsmanager.is_tick_ready(tick) or tick < (Scheduler.FIRST_TICK_ID + self.EXECUTIONDELAY):
 			#self.log.debug("MPManager: check tick %s ready: yes", tick)
 			return Timer.TEST_PASS
 		else:
@@ -165,6 +156,7 @@ class MPManager(LivingObject):
 		for command_packet in command_packets:
 			for command in command_packet.commandlist:
 				self.log.debug("MPManager: calling command (tick %s): %s", tick, command)
+				self.command_log.debug("MPManagerCommand: (tick %s): %s", tick, command)
 				command(WorldObject.get_object_by_id(command_packet.player_id))
 
 	def can_hash_value_check(self, tick):
@@ -187,9 +179,19 @@ class MPManager(LivingObject):
 				pass
 
 	def hash_value_diff(self, player1, hash1, player2, hash2):
+		"""Called when a divergence has been detected"""
 		self.log.error("MPManager: Hash diff:\n%s hash1: %s\n%s hash2: %s" % (player1, hash1, player2, hash2))
 		self.log.error("------------------")
-
+		self.log.error("Differences:")
+		if len(hash1) != len(hash2):
+			self.log.error("Different length")
+		items1 = sorted(hash1.iteritems())
+		items2 = sorted(hash2.iteritems())
+		for i in xrange(min(len(hash1), len(hash2))):
+			if (items1[i] != items2[i]):
+				self.log.error(str(i)+": "+str(items1[i]))
+				self.log.error(str(i)+": "+str(items2[i]))
+		self.log.error("------------------")
 
 	def calculate_execution_tick(self, tick):
 		return tick + self.EXECUTIONDELAY
@@ -200,7 +202,7 @@ class MPManager(LivingObject):
 	def execute(self, command, local = False):
 		"""Receive commands to be executed from local player
 		@param command: Command instance
-		@param local: not used in singleplayer manager"""
+		@param local: commands that don't need to be sent over the wire"""
 		self.log.debug('MPManager: adding command (next tick: ' + str(self.session.timer.tick_next_id) + ')'+str(command))
 		if local:
 			self.localcommands.append(command)
@@ -229,14 +231,17 @@ class MPManager(LivingObject):
 ################################################
 
 class MPPacketmanager(object):
+	log =  logging.getLogger("mpmanager")
 	def __init__(self, mpmanager):
 		self.mpmanager = mpmanager
 		self.command_packet_list = []
 
 	def is_tick_ready(self, tick):
 		"""Check if packets from all players have arrived (necessary for tick to begin)"""
-		#print 'packets for tick: ',  list(str(x) for x in self.get_packets_for_tick(tick, remove_returned_commands=False))
-		return len(self.get_packets_for_tick(tick, remove_returned_commands=False)) == self.mpmanager.get_player_count()
+		ready = len(self.get_packets_for_tick(tick, remove_returned_commands=False)) == self.mpmanager.get_player_count()
+		if not ready:
+			self.log.debug("tick not ready, packets: " + str(list(str(x) for x in self.get_packets_for_tick(tick, remove_returned_commands=False))))
+		return ready
 
 	def get_packets_for_tick(self, tick, remove_returned_commands=True):
 		"""Returns packets that are to be executed at a certain tick"""
@@ -264,6 +269,11 @@ class MPCheckupHashManager(MPPacketmanager):
 		return super(MPCheckupHashManager, self).is_tick_ready(tick)
 
 	def are_checkup_hash_values_equal(self, tick, cb_diff = None):
+		"""
+		@param packages for tick
+		@param cb_diff: called in case hashes differ
+		@return False if they are not equal
+		"""
 		pkges = self.get_packets_for_tick(tick)
 		for pkg in pkges[1:]:
 			if pkges[0].checkup_hash != pkg.checkup_hash:

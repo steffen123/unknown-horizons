@@ -20,98 +20,38 @@
 # ###################################################
 
 
-from horizons.world.building.collectingproducerbuilding import CollectingProducerBuilding
-from horizons.world.building.buildingresourcehandler import ProducerBuilding
-from horizons.world.building.building import BasicBuilding, SelectableBuilding
-from horizons.world.building.buildable import BuildableSingle, BuildableSingleOnCoast, BuildableSingleOnDeposit
+from horizons.world.building.buildingresourcehandler import BuildingResourceHandler
+from horizons.world.building.building import BasicBuilding
+from horizons.world.building.buildable import BuildableSingle, BuildableSingleOnCoast, BuildableSingleOnDeposit, BuildableSingleOnOcean
 from horizons.world.building.nature import Field
 from horizons.util import Rect
 from horizons.util.shapes.radiusshape import RadiusRect
 from horizons.command.building import Build
 from horizons.scheduler import Scheduler
-from horizons.constants import BUILDINGS, PRODUCTION, RES
-from horizons.gui.tabs import FarmProductionOverviewTab
-from horizons.world.status import InventoryFullStatus, ProductivityLowStatus
+from horizons.constants import BUILDINGS, PRODUCTION
 from horizons.world.production.producer import Producer
 from horizons.world.component.storagecomponent import StorageComponent
 
+class ProductionBuilding(BuildingResourceHandler, BuildableSingle, BasicBuilding):
+	pass
 
-class Farm(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
-	max_fields_possible = 8 # only for utilisation calculation
-	tabs = (FarmProductionOverviewTab,)
+class Farm(ProductionBuilding):
 
 	def _get_providers(self):
 		reach = RadiusRect(self.position, self.radius)
 		providers = self.island.get_providers_in_range(reach, reslist=self.get_needed_resources())
 		return [provider for provider in providers if isinstance(provider, Field)]
 
-	@property
-	def capacity_utilisation(self):
-		"""
-		Farm doesn't actually produce something, so calculate productivity by the number of fields nearby.
-		"""
 
-		result = float(len(self._get_providers())) / self.max_fields_possible
-		# sanity checks for theoretically impossible cases:
-		result = min(result, 1.0)
-		result = max(result, 0.0)
-		return result
-
-class Lumberjack(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
+class CoastalProducer(BuildingResourceHandler, BuildableSingleOnOcean, BasicBuilding):
+	"""E.g. salt ponds"""
 	pass
 
-class Refiner(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
-	pass
+class Fisher(BuildingResourceHandler, BuildableSingleOnCoast, BasicBuilding):
 
-class Hunter(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
-	pass
-
-class IronRefiner(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
-	pass
-
-class Smeltery(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
-	pass
-
-class CharcoalBurning(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
-	pass
-
-class SaltPond(SelectableBuilding, CollectingProducerBuilding, BuildableSingleOnCoast, BasicBuilding):
-	pass
-
-class CannonBuilder(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
-	pass
-
-class Fisher(SelectableBuilding, CollectingProducerBuilding, BuildableSingleOnCoast, BasicBuilding):
-
-	@classmethod
-	def _do_select(cls, renderer, position, world, settlement):
-		# Don't call super here, because we don't want to highlight the island
-		# only fish deposits
-		for building in world.get_providers_in_range(RadiusRect(position, cls.radius), res=RES.FISH_ID):
-			renderer.addColored(building._instance, *cls.selection_color)
-			cls._selected_tiles.append(building)
-
-	def deselect(self):
-		# TODO: find out if deselect_building should be dropped in favor of deselect
-		# since the latter is faster, and the specific deselecting of the first doesn't
-		# seem to be needed anywhere
-		# if so, this can be removed
-		self.deselect_building(self.session)
-		renderer = self.session.view.renderer['InstanceRenderer']
-		renderer.removeOutlined(self._instance)
-
-	@classmethod
-	def deselect_building(cls, session):
-		"""@see select_building,
-		@return list of tiles that were deselected."""
-		remove_colored = session.view.renderer['InstanceRenderer'].removeColored
-		for tile in cls._selected_tiles:
-			remove_colored(tile._instance)
-		# this actually means SelectableBuilding._selected_tiles = []
-		# writing self._selected_tiles = [] however creates a new variable in this instance,
-		# which isn't what we want. Therefore this workaround:
-		while cls._selected_tiles:
-			cls._selected_tiles.pop()
+	"""
+	Old selection workaround (only color fish) removed in b69c72aeef0174c42dec4039eed7b81f96f6dcaa.
+	"""
 
 	def get_non_paused_utilisation(self):
 		total = 0
@@ -123,16 +63,7 @@ class Fisher(SelectableBuilding, CollectingProducerBuilding, BuildableSingleOnCo
 			total += state_history[PRODUCTION.STATES.producing.index]
 		return total / float(len(productions))
 
-class SettlerServiceProvider(SelectableBuilding, CollectingProducerBuilding, BuildableSingle, BasicBuilding):
-	"""Class for Churches, School that provide a service-type res for settlers.
-	Also provides collectors for buildings that consume resources (tavern)."""
-	def get_status_icons(self):
-		banned_classes = (InventoryFullStatus, ProductivityLowStatus)
-		# inventories are full most of the time, don't show it
-		return [ i for i in super(SettlerServiceProvider, self).get_status_icons() if \
-		         not i.__class__ in banned_classes ]
-
-class Mine(SelectableBuilding, ProducerBuilding, BuildableSingleOnDeposit, BasicBuilding):
+class Mine(BuildingResourceHandler, BuildableSingleOnDeposit, BasicBuilding):
 	def __init__(self, inventory, deposit_class, *args, **kwargs):
 		"""
 		@param inventory: inventory dump of deposit (collected by get_prebuild_data())
@@ -145,8 +76,9 @@ class Mine(SelectableBuilding, ProducerBuilding, BuildableSingleOnDeposit, Basic
 
 	def initialize(self, deposit_class, inventory, **kwargs):
 		super(Mine, self).initialize( ** kwargs)
-		self.__init(deposit_class=deposit_class, mine_empty_msg_shown=False)
+		self.__init(deposit_class=deposit_class)
 		for res, amount in inventory.iteritems():
+			# bury resources from mountain in mine
 			self.get_component(StorageComponent).inventory.alter(res, amount)
 
 	@classmethod
@@ -164,9 +96,8 @@ class Mine(SelectableBuilding, ProducerBuilding, BuildableSingleOnDeposit, Basic
 		else:
 			return pos
 
-	def __init(self, deposit_class, mine_empty_msg_shown):
+	def __init(self, deposit_class):
 		self.__deposit_class = deposit_class
-		self._mine_empty_msg_shown = mine_empty_msg_shown
 
 		# setup loading area
 		# TODO: for now we assume that a mine building is 5x5 with a 3x1 entry on 1 side
@@ -193,67 +124,11 @@ class Mine(SelectableBuilding, ProducerBuilding, BuildableSingleOnDeposit, Basic
 
 	def save(self, db):
 		super(Mine, self).save(db)
-		db("INSERT INTO mine(rowid, deposit_class, mine_empty_msg_shown) VALUES(?, ?, ?)", \
-		   self.worldid, self.__deposit_class, self._mine_empty_msg_shown)
+		db("INSERT INTO mine(rowid, deposit_class) VALUES(?, ?)", \
+		   self.worldid, self.__deposit_class)
 
 	def load(self, db, worldid):
 		super(Mine, self).load(db, worldid)
-		deposit_class, mine_empty_msg_shown = \
-		             db("SELECT deposit_class, mine_empty_msg_shown FROM mine WHERE rowid = ?", worldid)[0]
-		self.__init(deposit_class, mine_empty_msg_shown)
-
-	def _on_production_change(self):
-		super(Mine, self)._on_production_change()
-		if self._get_current_state() == PRODUCTION.STATES.waiting_for_res and \
-		   (hasattr(self, "_mine_empty_msg_shown") and \
-		    not self._mine_empty_msg_shown):
-			# all resources are gone from the mine.
-			self._mine_empty_msg_shown = True
-			if self.is_active():
-				self.set_active(active=False)
-			self.owner.notify_mine_empty(self)
-
-	def set_active(self, production=None, active=True):
-		super(Mine, self).set_active(production, active)
-		if active and self._get_current_state() == PRODUCTION.STATES.waiting_for_res:
-			# don't allow reactivating a mine that's already empty
-			# we can't check for this before changing activity, because the state is paused
-			# before. Therefore we have to react here and disable the mine again.
-			self.set_active(production, active=False)
-
-""" AnimalFarm is not used for now (code may not work anymore)
-
-class AnimalFarm(SelectableBuilding, CollectingProducerBuilding, BuildableSingleWithSurrounding, BasicBuilding):
-	_surroundingBuildingClass = 18
-	"" This class builds pasturage in the radius automatically,
-	so that farm animals can graze there ""
-
-	def __init__(self, **kwargs):
-		super(AnimalFarm, self).__init__(**kwargs)
-
-	def create_collector(self):
-		self.animals = []
-
-		# NOTE: animals have to be created before the AnimalCollector
-		for (animal, number) in horizons.main.db("SELECT unit_id, count FROM animals \
-		                                    WHERE building_id = ?", self.id):
-			for i in xrange(0, number):
-				Entities.units[animal](self)
-
-		super(AnimalFarm, self).create_collector()
-
-	def save(self, db):
-		super(AnimalFarm, self).save(db)
-		for animal in self.animals:
-			animal.save(db)
-
-	def load(self, db, worldid):
-		super(AnimalFarm, self).load(db, worldid)
-		self.animals = []
-
-	def remove(self):
-		while len(self.animals) > 0:
-			self.animals[0].remove()
-		super(AnimalFarm, self).remove()
-"""
+		deposit_class = db("SELECT deposit_class FROM mine WHERE rowid = ?", worldid)[0][0]
+		self.__init(deposit_class)
 

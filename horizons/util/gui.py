@@ -84,20 +84,20 @@ def get_res_icon(res):
 
 
 def create_resource_icon(res_id, db, size=50):
-	"""Creates a pychan TooltipIcon for a resource.
+	"""Creates a pychan Icon for a resource.
 	Returns None if size parameter is invalid (not in 16,24,50).
 	@param res_id:
 	@param db: dbreader for main db
 	@param size: Size of icon in px. Valid: 16, 24, 50."""
-	from horizons.gui.widgets.tooltip import TooltipIcon
+	from fife.extensions.pychan.widgets import Icon
 	if size == 50:
-		return TooltipIcon(tooltip=db.get_res_name(res_id),
+		return Icon(helptext=db.get_res_name(res_id),
 		                   image=get_res_icon(res_id)[0])
 	elif size == 24:
-		return TooltipIcon(tooltip=db.get_res_name(res_id),
+		return Icon(helptext=db.get_res_name(res_id),
 		                   image=get_res_icon(res_id)[2])
 	elif size == 16:
-		return TooltipIcon(tooltip=db.get_res_name(res_id),
+		return Icon(helptext=db.get_res_name(res_id),
 		                   image=get_res_icon(res_id)[3])
 	else:
 		return None
@@ -136,18 +136,20 @@ class LazyWidgetsDict(dict):
 		# loading happens automatically on next access
 
 
-def create_resource_selection_dialog(on_click, inventory, db, res_filter=None):
+def create_resource_selection_dialog(on_click, inventory, db, widget='select_trade_resource.xml', res_filter=None):
 	"""Returns a container containing resource icons
 	@param on_click: called with resource id as parameter on clicks
 	@param inventory: to determine fill status of resource slots
 	@param db: main db instance
+	@param widget: which xml file to use as a template. Default: tabwidget. Required
+	               since the resource bar also uses this code (no tabs there though).
 	@param res_filter: callback to decide which icons to use. Default: show all
 	"""
 	from horizons.gui.widgets.imagefillstatusbutton import ImageFillStatusButton
-	from horizons.gui.widgets.tooltip import TooltipButton
+	from fife.extensions.pychan.widgets import ImageButton
 	dummy_icon_path = "content/gui/icons/resources/none_gray.png"
 
-	dlg = load_uh_widget('select_trade_resource.xml')
+	dlg = load_uh_widget(widget)
 
 	button_width = ImageFillStatusButton.DEFAULT_BUTTON_SIZE[0] # used for dummy button
 	vbox = dlg.findChild(name="resources")
@@ -164,7 +166,7 @@ def create_resource_selection_dialog(on_click, inventory, db, res_filter=None):
 			continue
 		# create button (dummy one or real one)
 		if res_id == 0:
-			button = TooltipButton( size=(button_width, button_width), name="resource_icon_00")
+			button = ImageButton( size=(button_width, button_width), name="resource_icon_00")
 			button.up_image, button.down_image, button.hover_image = (dummy_icon_path,)*3
 		else:
 			amount = inventory[res_id]

@@ -19,6 +19,8 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+import hashlib
+import os.path
 from collections import defaultdict, deque
 
 from horizons.util.savegameupgrader import SavegameUpgrader
@@ -34,7 +36,8 @@ class SavegameAccessor(DbReader):
 
 	def __init__(self, dbfile):
 		self.upgrader = SavegameUpgrader(dbfile)
-		super(SavegameAccessor, self).__init__(dbfile=self.upgrader.get_path())
+		dbfile = self.upgrader.get_path()
+		super(SavegameAccessor, self).__init__(dbfile=dbfile)
 		self._load_building()
 		self._load_settlement()
 		self._load_concrete_object()
@@ -48,6 +51,8 @@ class SavegameAccessor(DbReader):
 		self._load_unit_path()
 		self._load_component()
 		self._load_storage_global_limit()
+		self._load_health()
+		self._hash = None
 
 	def close(self):
 		super(SavegameAccessor, self).close()
@@ -91,19 +96,27 @@ class SavegameAccessor(DbReader):
 
 
 	def _load_production(self):
-		self._production = {}
+		self._productions_by_worldid = {}
+		self._production_lines_by_owner = {}
 		self._productions_by_id_and_owner = {}
 		db_data = self("SELECT rowid, state, owner, prod_line_id, remaining_ticks, _pause_old_state, creation_tick FROM production")
 		for row in db_data:
 			rowid = int(row[0])
 			data = row[1:]
-			self._production[rowid] = data
+			self._productions_by_worldid[rowid] = data
 			owner = int(row[2])
 			line = int(row[3])
 			if not line in self._productions_by_id_and_owner:
 				self._productions_by_id_and_owner[line] = {}
 			# in the line dict, the owners are unique
 			self._productions_by_id_and_owner[line][owner] = data
+
+			if owner not in self._production_lines_by_owner:
+				self._production_lines_by_owner[owner] = [line]
+			else:
+				self._production_lines_by_owner[owner].append(line)
+
+			self._production_lines_by_owner[owner].append
 
 		self._production_state_history = defaultdict(lambda: deque())
 		for production_id, tick, state in self("SELECT production, tick, state FROM production_state_history ORDER BY production, tick"):
@@ -115,7 +128,11 @@ class SavegameAccessor(DbReader):
 
 	def get_production_line_id(self, production_worldid):
 		"""Returns the prod_line_id of the given production"""
-		return self._production[int(production_worldid)][2]
+		return self._productions_by_worldid[int(production_worldid)][2]
+
+	def get_production_lines_by_owner(self, owner):
+		"""Returns the prod_line_id of the given production"""
+		return self._production_lines_by_owner.get(owner, [])
 
 	def get_production_state_history(self, worldid):
 		return self._production_state_history[int(worldid)]
@@ -228,5 +245,30 @@ class SavegameAccessor(DbReader):
 
 	def get_storage_global_limit(self, worldid):
 		return self._storage_global_limit[int(worldid)]
+
+
+	def _load_health(self):
+		self._health = dict( self("SELECT owner_id, health FROM unit_health") )
+
+	def get_health(self, owner):
+		return self._health[owner]
+
+	# Random savegamefile related utility that i didn't know where to put
+
+	@classmethod
+	def get_players_num(cls, savegamefile):
+		"""Return number of regular human and ai players"""
+		return DbReader(savegamefile)("SELECT count(rowid) FROM player WHERE is_trader = 0 AND is_pirate = 0")[0][0]
+
+	@classmethod
+	def get_hash(cls, savegamefile):
+		if not os.path.exists(savegamefile):
+			return False
+		fd = open(savegamefile, "rb")
+		h = hashlib.sha1()
+		h.update(fd.read())
+		filehash = h.hexdigest()
+		fd.close();
+		return filehash
 
 decorators.bind_all(SavegameAccessor)

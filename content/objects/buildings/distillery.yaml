@@ -1,6 +1,6 @@
 id: 26
 name: _ Distillery
-baseclass: production.Refiner
+baseclass: production.ProductionBuilding
 radius: 8
 cost: 10
 cost_inactive: 0
@@ -13,6 +13,10 @@ tooltip_text: _ Turns sugar into liquor.
 settler_level: 1
 buildingcosts: {1: 250, 4: 2, 6: 2, 7: 4}
 components:
+- SelectableComponent:
+    type: building
+    tabs: [ProductionOverviewTab]
+    enemy_tabs: [EnemyBuildingOverviewTab,]
 - HealthComponent: {maxhealth: 1000}
 - ProducerComponent:
     productionlines:
@@ -26,5 +30,8 @@ components:
     inventory:
       SlotsStorage:
         slot_sizes: {18: 6, 22: 6}
+- CollectingComponent:
+    collectors:
+      1000002: 1
 actionsets:
   as_distillery0: {level: 0}

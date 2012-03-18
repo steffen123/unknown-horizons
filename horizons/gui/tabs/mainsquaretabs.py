@@ -23,22 +23,27 @@ import operator
 
 import horizons.main
 
-from horizons.gui.tabs.tabinterface import TabInterface
+from horizons.gui.tabs.overviewtab import OverviewTab
 from horizons.gui.widgets.productionoverview import ProductionOverview
 from horizons.gui.tabs.overviewtab import _setup_tax_slider
 
-from horizons.extscheduler import ExtScheduler
+from horizons.util import Callback
+from horizons.util.messaging.message import UpgradePermissionsChanged
 from horizons.util.gui import create_resource_icon
-from horizons.command.uioptions import SetTaxSetting, SetSettlementUpgradePermissions
+from horizons.command.uioptions import SetSettlementUpgradePermissions
 from horizons.constants import BUILDINGS, SETTLER
 from horizons.world.component.tradepostcomponent import TradePostComponent
 from horizons.world.component.namedcomponent import NamedComponent
 
-class MainSquareTab(TabInterface):
+class MainSquareTab(OverviewTab):
 	"""Tab for main square. Refreshes when one building on the settlement changes"""
-	def __init__(self, *args, **kwargs):
-		super(MainSquareTab, self).__init__(*args, **kwargs)
-		self._refresh_scheduled = False
+	def __init__(self, instance, widget, icon_path):
+		super(MainSquareTab, self).__init__(instance=instance, widget=widget, icon_path=icon_path)
+		self.init_values()
+
+	@property
+	def settlement(self):
+		return self.instance.settlement
 
 	def show(self):
 		super(MainSquareTab, self).show()
@@ -53,30 +58,12 @@ class MainSquareTab(TabInterface):
 			if building.has_change_listener(self._schedule_refresh):
 				building.remove_change_listener(self._schedule_refresh)
 
-	def _schedule_refresh(self):
-		"""Schedule a refresh soon, dropping all other refresh request, that appear until then.
-		This saves a lot of CPU time, if you have a huge island, or play on high speed."""
-		if not self._refresh_scheduled:
-			self._refresh_scheduled = True
-			ExtScheduler().add_new_object(self.refresh, self, run_in=0.3)
-
-	def refresh(self):
-		super(MainSquareTab, self).refresh()
-		self._refresh_scheduled = False
-
-
 class AccountTab(MainSquareTab):
 	"""Display basic income and expenses of a settlement"""
 	def __init__(self, instance):
-		super(AccountTab, self).__init__(widget = 'tab_account.xml')
-		self.settlement = instance.settlement
-		self.init_values()
-		icon_path = 'content/gui/icons/tabwidget/warehouse/account_%s.png'
-		self.button_up_image = icon_path % 'u'
-		self.button_active_image = icon_path % 'a'
-		self.button_down_image = icon_path % 'd'
-		self.button_hover_image = icon_path % 'h'
-		self.tooltip = _("Account")
+		super(AccountTab, self).__init__(instance=instance, widget='tab_account.xml', \
+		                                 icon_path='content/gui/icons/tabwidget/warehouse/account_%s.png')
+		self.helptext = _("Account")
 
 		self.widget.mapEvents({
 		  'show_production_overview/mouseClicked' : self.show_production_overview
@@ -102,22 +89,27 @@ class AccountTab(MainSquareTab):
 
 class MainSquareOverviewTab(AccountTab):
 	def __init__(self, instance):
-		super(MainSquareOverviewTab, self).__init__(instance)
-		self.tooltip = _('Main square overview')
+		super(MainSquareOverviewTab, self).__init__(instance=instance)
+		self.helptext = _('Main square overview')
 		self.widget.child_finder('headline').text = unicode(self.settlement.get_component(NamedComponent).name)
+		self.widget.child_finder('headline').helptext = _('Click to change the name of your settlement')
+
+	def refresh(self):
+		self.widget.child_finder('headline').text = unicode(self.settlement.get_component(NamedComponent).name)
+		events = {
+				'headline': Callback(self.instance.session.ingame_gui.show_change_name_dialog, self.settlement)
+		         }
+		self.widget.mapEvents(events)
+		super(MainSquareOverviewTab, self).refresh()
 
 class MainSquareSettlerTabSettlerTab(MainSquareTab):
 	"""Displays information about the settlers on average as overview"""
 	def __init__(self, instance):
-		super(MainSquareSettlerTabSettlerTab, self).__init__(widget = 'mainsquare_inhabitants.xml')
-		self.settlement = instance.settlement
-		self.init_values()
-		icon_path = 'content/gui/icons/widgets/cityinfo/inhabitants.png'
-		self.button_up_image = icon_path
-		self.button_active_image = icon_path
-		self.button_down_image = icon_path
-		self.button_hover_image = icon_path
-		self.tooltip = _("Settler overview")
+		super(MainSquareSettlerTabSettlerTab, self).__init__(
+				widget='mainsquare_inhabitants.xml',
+				instance=instance,
+				icon_path='content/gui/icons/widgets/cityinfo/inhabitants.png')
+		self.helptext = _("Settler overview")
 
 		self._old_most_needed_res_icon = None
 
@@ -152,15 +144,8 @@ class MainSquareSettlerTabSettlerTab(MainSquareTab):
 class MainSquareSettlerLevelTab(MainSquareTab):
 	LEVEL = None # overwrite in subclass
 	def __init__(self, instance, widget):
-		super(MainSquareSettlerLevelTab, self).__init__(widget = widget)
-		self.settlement = instance.settlement
-		self.init_values()
-		icon_path = 'content/gui/icons/tabwidget/mainsquare/inhabitants%s' % self.__class__.LEVEL + '_%s.png'
-		self.button_up_image = icon_path % 'u'
-		self.button_active_image = icon_path % 'a'
-		self.button_down_image = icon_path % 'd'
-		self.button_hover_image = icon_path % 'h'
-
+		icon_path = 'content/gui/icons/tabwidget/mainsquare/inhabitants{incr}_%s.png'.format(incr=self.__class__.LEVEL)
+		super(MainSquareSettlerLevelTab, self).__init__(widget=widget, instance=instance, icon_path=icon_path)
 		self.max_inhabitants = instance.session.db.get_settler_inhabitants_max(self.__class__.LEVEL)
 
 		slider = self.widget.child_finder('tax_slider')
@@ -172,18 +157,31 @@ class MainSquareSettlerLevelTab(MainSquareTab):
 	def shown_for(cls, instance):
 		return instance.owner.settler_level >= cls.LEVEL
 
+	def show(self):
+		super(MainSquareSettlerLevelTab, self).show()
+		self.instance.session.message_bus.subscribe_locally(UpgradePermissionsChanged, self.settlement, self.refresh_via_message)
+
+	def hide(self):
+		super(MainSquareSettlerLevelTab, self).hide()
+		self.instance.session.message_bus.unsubscribe_locally(UpgradePermissionsChanged, self.settlement, self.refresh_via_message)
+
 	def _get_last_tax_paid(self):
-		return sum([building.last_tax_payed for building in self.settlement.get_buildings_by_id(BUILDINGS.RESIDENTIAL_CLASS) if \
+		return sum([building.last_tax_payed for building in self.settlement.buildings_by_id[BUILDINGS.RESIDENTIAL_CLASS] if \
 			building.level == self.__class__.LEVEL])
 
 	def _get_resident_counts(self):
 		result = {}
-		for building in self.settlement.get_buildings_by_id(BUILDINGS.RESIDENTIAL_CLASS):
+		for building in self.settlement.buildings_by_id[BUILDINGS.RESIDENTIAL_CLASS]:
 			if building.level == self.__class__.LEVEL:
 				if building.inhabitants not in result:
 					result[building.inhabitants] = 0
 				result[building.inhabitants] += 1
 		return result
+
+	def refresh_via_message(self, message):
+		# message bus requires parameter, refresh() doesn't allow parameter
+		# TODO: find general solution
+		self.refresh()
 
 	def refresh(self):
 		self.widget.mapEvents({
@@ -198,10 +196,10 @@ class MainSquareSettlerLevelTab(MainSquareTab):
 		if self.__class__.LEVEL < SETTLER.CURRENT_MAX_INCR: #max incr => cannot allow upgrades
 			if self.settlement.upgrade_permissions[self.__class__.LEVEL]:
 				upgrades_button.set_active()
-				upgrades_button.tooltip = _('Don\'t allow upgrades')
+				upgrades_button.helptext = _('Don\'t allow upgrades')
 			else:
 				upgrades_button.set_inactive()
-				upgrades_button.tooltip = _('Allow upgrades')
+				upgrades_button.helptext = _('Allow upgrades')
 
 		# refresh residents per house info
 		resident_counts = self._get_resident_counts()
@@ -222,22 +220,27 @@ class MainSquareSettlerLevelTab(MainSquareTab):
 
 	def toggle_upgrades(self):
 		SetSettlementUpgradePermissions(self.settlement, self.__class__.LEVEL, not self.settlement.upgrade_permissions[self.__class__.LEVEL]).execute(self.settlement.session)
-		self.refresh()
 
 class MainSquareSailorsTab(MainSquareSettlerLevelTab):
 	LEVEL = SETTLER.SAILOR_LEVEL
 	def __init__(self, instance):
 		super(MainSquareSailorsTab, self).__init__(instance, 'mainsquare_sailors.xml')
-		self.tooltip = _("Sailors")
+		self.helptext = _("Sailors")
 
 class MainSquarePioneersTab(MainSquareSettlerLevelTab):
 	LEVEL = SETTLER.PIONEER_LEVEL
 	def __init__(self, instance):
 		super(MainSquarePioneersTab, self).__init__(instance, 'mainsquare_pioneers.xml')
-		self.tooltip = _("Pioneers")
+		self.helptext = _("Pioneers")
 
 class MainSquareSettlersTab(MainSquareSettlerLevelTab):
 	LEVEL = SETTLER.SETTLER_LEVEL
 	def __init__(self, instance):
 		super(MainSquareSettlersTab, self).__init__(instance, 'mainsquare_settlers.xml')
-		self.tooltip = _("Settlers")
+		self.helptext = _("Settlers")
+
+class MainSquareCitizensTab(MainSquareSettlerLevelTab):
+	LEVEL = SETTLER.CITIZEN_LEVEL
+	def __init__(self, instance):
+		super(MainSquareCitizensTab, self).__init__(instance, 'mainsquare_citizens.xml')
+		self.helptext = _("Citizens")

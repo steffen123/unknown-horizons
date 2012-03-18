@@ -23,11 +23,11 @@ from fife.extensions import pychan
 
 from horizons.util.gui import load_uh_widget, get_res_icon
 from horizons.util import Callback
-from horizons.gui.widgets import TooltipIcon
+from fife.extensions.pychan.widgets import Icon
 from horizons.command.unit import SetStance
 from horizons.extscheduler import ExtScheduler
 from horizons.world.component.healthcomponent import HealthComponent
-from horizons.world.component.stancecomponent import NoneStance, AggressiveStance, HoldGroundStance, FleeStance
+from horizons.world.component.stancecomponent import NoneStance, AggressiveStance, HoldGroundStance, FleeStance, DEFAULT_STANCES
 
 class StanceWidget(pychan.widgets.Container):
 	"""Widget used for setting up the stance for one instance"""
@@ -35,17 +35,13 @@ class StanceWidget(pychan.widgets.Container):
 		super(StanceWidget, self).__init__(size=(245,50), **kwargs)
 		widget = load_uh_widget('stancewidget.xml')
 		self.addChild(widget)
-		ExtScheduler().add_new_object(self.refresh, self, run_in=1, loops=-1)
+		ExtScheduler().add_new_object(self.refresh, self, run_in=0.3, loops=-1)
 
 	def init(self, instance):
 		self.instance = instance
 		self.toggle_stance()
-		self.mapEvents({
-			'aggressive': Callback(self.set_stance, AggressiveStance),
-			'hold_ground': Callback(self.set_stance, HoldGroundStance),
-			'none': Callback(self.set_stance, NoneStance),
-			'flee': Callback(self.set_stance, FleeStance)
-			})
+		events = dict( (i.NAME, Callback(self.set_stance, i) ) for i in DEFAULT_STANCES )
+		self.mapEvents( events )
 
 	def beforeShow(self):
 		super(StanceWidget, self).beforeShow()
@@ -53,10 +49,11 @@ class StanceWidget(pychan.widgets.Container):
 		ExtScheduler().add_new_object(self.refresh, self, run_in=1, loops=-1)
 
 	def refresh(self):
-		self.toggle_stance()
 		if not self.isVisible():
 			# refresh not needed
 			ExtScheduler().rem_all_classinst_calls(self)
+			return
+		self.toggle_stance()
 
 	def remove(self, caller=None):
 		"""Removes instance ref"""
@@ -69,10 +66,8 @@ class StanceWidget(pychan.widgets.Container):
 		self.toggle_stance()
 
 	def toggle_stance(self):
-		self.findChild(name='aggressive').set_inactive()
-		self.findChild(name='hold_ground').set_inactive()
-		self.findChild(name='none').set_inactive()
-		self.findChild(name='flee').set_inactive()
+		for stance in DEFAULT_STANCES:
+			self.findChild(name=stance.NAME).set_inactive()
 		self.findChild(name=self.instance.stance.NAME).set_active()
 
 class HealthWidget(pychan.widgets.Container):
@@ -120,10 +115,10 @@ class WeaponStorageWidget(pychan.widgets.HBox):
 				weapons_added = True
 				icon_image = get_res_icon(weapon)[2]
 				icon_tooltip = self.instance.session.db.get_res_name(weapon)+': '+str(amount)
-				icon = TooltipIcon(image = icon_image, tooltip = icon_tooltip)
+				icon = Icon(image = icon_image, helptext=icon_tooltip)
 				self.addChild(icon)
 		if not weapons_added:
 			icon_image = "content/gui/icons/resources/none.png"
-			icon = TooltipIcon(image = icon_image, tooltip = _("none"))
+			icon = Icon(image = icon_image, helptext=_("none"))
 			self.addChild(icon)
 

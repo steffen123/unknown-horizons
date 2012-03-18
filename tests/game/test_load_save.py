@@ -30,7 +30,7 @@ from horizons.world.production.producer import Producer
 
 from tests.game import game_test, new_session, settle, load_session
 
-@game_test(timeout=0, manual_session=True)
+@game_test(manual_session=True)
 def test_load_inactive_production():
 	"""
 	create a savegame with a inactive production, load it
@@ -57,10 +57,11 @@ def test_load_inactive_production():
 	loadedlj = WorldObject.get_object_by_id(worldid)
 
 	# Make sure it really is not active
-	assert not loadedlj.get_component(Producer).is_active()
+	producer = loadedlj.get_component(Producer)
+	assert not producer.is_active()
 
 	# Trigger bug #1359
-	ToggleActive(loadedlj).execute(session)
+	ToggleActive(producer).execute(session)
 
 	session.end()
 
@@ -70,7 +71,7 @@ def create_lumberjack_production_session():
 	settlement, island = settle(session)
 
 	for x in [29, 30, 31, 32]:
-		Build(BUILDINGS.TREE_CLASS, x, 29, island, settlement=settlement, data = {"start_finished": True})(player)
+		Build(BUILDINGS.TREE_CLASS, x, 29, island, settlement=settlement,)(player)
 	building = Build(BUILDINGS.LUMBERJACK_CLASS, 30, 30, island, settlement=settlement)(player)
 	production = building.get_component(Producer).get_productions()[0]
 
@@ -89,7 +90,7 @@ def create_lumberjack_production_session():
 	session = load_session(filename1)
 	return session
 
-@game_test(timeout=0, manual_session=True)
+@game_test(manual_session=True)
 def test_load_producing_production_fast():
 	"""Create a saved game with a producing production, load it, and try to save again very fast."""
 	session = create_lumberjack_production_session()
@@ -101,7 +102,7 @@ def test_load_producing_production_fast():
 	assert session.save(savegamename=filename2)
 	session.end()
 
-@game_test(timeout=0, manual_session=True)
+@game_test(manual_session=True)
 def test_load_producing_production_slow():
 	"""Create a saved game with a producing production, load it, and try to save again in a few seconds."""
 	session = create_lumberjack_production_session()

@@ -28,7 +28,7 @@ class ChangeListener(object):
 	An object calls _changed everytime something has changed, obviously.
 	This function calls every Callback, that has been registered to listen for a change.
 	NOTE: ChangeListeners aren't saved, they have to be reregistered on load
-	NOTE: Removelisteners must not access the object, as it is in progress of being destroyed.
+	NOTE: RemoveListeners must not access the object, as it is in progress of being destroyed.
 	"""
 	def __init__(self, *args, **kwargs):
 		super(ChangeListener, self).__init__()
@@ -64,19 +64,26 @@ class ChangeListener(object):
 		self.__event_call_number += 1
 		for listener in listener_list:
 			if listener:
-				listener()
+				try:
+					listener()
+				except ReferenceError, e:
+					# listener object is dead, don't crash since it doesn't need updates now anyway
+					print 'Warning: the dead are listening to', self, ': ', e
+					import traceback
+					traceback.print_stack()
 
 		self.__event_call_number -= 1
 
 		if self.__event_call_number == 0:
 			self.__hard_remove = True
-			listener_list = [ l for l in listener_list if l ]
+			listener_list[:] = [ l for l in listener_list if l ]
 
 	## Normal change listener
-	def add_change_listener(self, listener, call_listener_now = False):
+	def add_change_listener(self, listener, call_listener_now=False, no_duplicates=False):
 		assert callable(listener)
-		self.__listeners.append(listener)
-		if call_listener_now:
+		if not no_duplicates or listener not in self.__listeners:
+			self.__listeners.append(listener)
+		if call_listener_now: # also call if duplicate is adde
 			listener()
 
 	def remove_change_listener(self, listener):

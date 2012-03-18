@@ -18,13 +18,18 @@
 # Free Software Foundation, Inc.,
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
+import os
+import tempfile
 
 from horizons.command.building import Build, Tear
 from horizons.world.component.storagecomponent import StorageComponent
+from horizons.world.component.collectingcompontent import CollectingComponent
 from horizons.world.production.producer import Producer, QueueProducer
-from horizons.constants import BUILDINGS, RES, PRODUCTIONLINES
+from horizons.constants import BUILDINGS, RES, PRODUCTIONLINES, GAME
+from horizons.util.worldobject import WorldObject
+from horizons.world.production.utilisation import FieldUtilisation
 
-from tests.game import settle, game_test
+from tests.game import settle, game_test, new_session, load_session
 from tests.game.test_buildings import test_brick_production_chain, test_tool_production_chain
 from tests.game.test_farm import _build_farm
 
@@ -32,7 +37,7 @@ from tests.game.test_farm import _build_farm
 @game_test
 def test_ticket_979(s, p):
 	settlement, island = settle(s)
-	storage_collectors = settlement.warehouse.get_local_collectors()
+	storage_collectors = settlement.warehouse.get_component(CollectingComponent).get_local_collectors()
 
 	farm = _build_farm(30, 30, BUILDINGS.POTATO_FIELD_CLASS, island, settlement, p)
 
@@ -72,7 +77,7 @@ def test_ticket_1016(s, p):
 	torn_down = False
 	while not torn_down:
 		s.run(seconds=1)
-		for col in farm._CollectingBuilding__collectors:
+		for col in farm.get_component(CollectingComponent)._CollectingComponent__collectors:
 			if col.job:
 				Tear(col.job.object)(p)
 				Tear(farm)(p)
@@ -143,3 +148,125 @@ def test_tool_brick_interference():
 	"""
 	test_tool_production_chain()
 	test_brick_production_chain()
+
+@game_test(manual_session=True)
+def test_ticket_1427():
+	"""Boatbuilder production progress should be saved properly"""
+
+	session, player = new_session()
+	settlement, island = settle(session)
+
+	boat_builder = Build(BUILDINGS.BOATBUILDER_CLASS, 35, 20, island, settlement=settlement)(player)
+	worldid = boat_builder.worldid
+
+	# Make sure no boards are available
+	settlement.get_component(StorageComponent).inventory.alter(RES.BOARDS_ID, -1000)
+
+	bb_storage = boat_builder.get_component(StorageComponent)
+
+	# Add production to use resources
+	bb_producer =  boat_builder.get_component(Producer)
+	bb_producer.add_production_by_id(PRODUCTIONLINES.HUKER)
+	production = bb_producer._productions[PRODUCTIONLINES.HUKER]
+
+	assert production.progress == 0.0
+
+	bb_storage.inventory.alter(RES.TEXTILE_ID, 10)
+	bb_storage.inventory.alter(RES.BOARDS_ID, 6)
+
+	production_line = production._prod_line
+
+	# Make sure the boatbuilder consumes everything in its inventory
+	session.run(seconds=10)
+
+	# Check if correctly consumed wood
+	assert production_line.consumed_res[RES.BOARDS_ID] == -2
+
+	# Save all production process for later
+	expected_consumed_res = production_line.consumed_res
+	expected_produced_res = production_line.produced_res
+	expected_production = production_line.production
+	expected_progress = production.progress
+
+	# Make sure the producer used the boards
+	assert bb_storage.inventory[RES.BOARDS_ID] == 0
+
+	fd, filename = tempfile.mkstemp()
+	os.close(fd)
+	assert session.save(savegamename=filename)
+	session.end(keep_map=True)
+
+	# Load game
+	session = load_session(filename)
+	loadedbb = WorldObject.get_object_by_id(worldid)
+
+	production_loaded = loadedbb.get_component(Producer)._productions[PRODUCTIONLINES.HUKER]
+	production_line_loaded = production_loaded._prod_line
+
+	# Make sure everything is loaded correctly
+	assert expected_consumed_res == production_line_loaded.consumed_res
+	assert expected_produced_res == production_line_loaded.produced_res
+	assert expected_production == production_line_loaded.production
+	assert expected_progress == production_loaded.progress
+
+	# if you don't let the session run for a bit then collectors won't be fully initialized and can't be killed => another test will fail in session.end()
+	session.run(seconds=1)
+	session.end()
+
+
+@game_test
+def test_settler_level(s, p):
+	"""
+	Verify that settler level up works.
+	"""
+	settlement, island = settle(s)
+
+	settler = Build(BUILDINGS.RESIDENTIAL_CLASS, 22, 22, island, settlement=settlement)(p)
+
+	# make it happy
+	inv = settler.get_component(StorageComponent).inventory
+	to_give = inv.get_free_space_for(RES.HAPPINESS_ID)
+	inv.alter(RES.HAPPINESS_ID, to_give)
+	level = settler.level
+
+	s.run(seconds=GAME.INGAME_TICK_INTERVAL)
+
+	# give upgrade res
+	inv.alter(RES.BOARDS_ID, 100)
+
+	s.run(seconds=GAME.INGAME_TICK_INTERVAL)
+
+	# should have leveled up
+	assert settler.level == level + 1
+
+@game_test
+def test_ticket_1523(s, p):
+	settlement, island = settle(s)
+
+	farm = _build_farm(30, 30, BUILDINGS.POTATO_FIELD_CLASS, island, settlement, p)
+
+	# Let it work for a bit
+	s.run(seconds=60)
+	assert farm.get_component(StorageComponent).inventory[RES.FOOD_ID]
+
+
+	assert isinstance(farm.get_component(Producer)._Producer__utilisation, FieldUtilisation)
+	# Should be 0.5
+	assert not farm.get_component(Producer).capacity_utilisation_below(0.4)
+	assert farm.get_component(Producer).capacity_utilisation > 0.4
+
+@game_test
+def test_ticket_1561(s, p):
+	settlement, island = settle(s)
+
+	residence = Build(BUILDINGS.RESIDENTIAL_CLASS, 30, 30, island, settlement=settlement)(p)
+	s.run(ticks=1)
+	assert residence.level == 0
+
+	residence.level_up()
+	s.run(ticks=1)
+	assert residence.level == 1
+
+	residence2 = Build(BUILDINGS.RESIDENTIAL_CLASS, 30, 32, island, settlement=settlement)(p)
+	s.run(ticks=1)
+	assert residence2.level == 0

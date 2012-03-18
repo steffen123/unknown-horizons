@@ -1,5 +1,14 @@
 #!/bin/sh
 
+###############################################################################
+#
+# == I18N DEV USE CASES: CHEATSHEET ==
+#
+# ** Refer to  development/copy_pofiles.sh  for help with building or updating
+#    the translation files for Unknown Horizons.
+#
+###############################################################################
+
 # Extract strings from a scenario file for easy translation in pootle.
 #
 # Usage: sh create_scenario_pot.sh scenario [po-directory]
@@ -71,23 +80,40 @@ write('scenario description', prep(scenario['description']))
 for event in scenario['events']:
 	for action in event['actions']:
 		at = action['type']
-		if at not in ('message', 'logbook', 'logbook_w'):
+		if at not in ('message', 'logbook'):
 			continue
 		elif at == 'message':
 			comment = COMMENT_MESSAGEWIDGET
-		elif at[0:7] == 'logbook':
-			comment = COMMENT_HEADING
-		for argument in action['arguments']:
-			if isinstance(argument, int):
-				continue
-			argument = prep(argument)
-			if not argument:
-				comment = COMMENT_TEXT
-				#HACK the first arg (headline) is empty, do not write the headline comment afterwards
-				continue
-			write(comment, argument)
-			#HACK the first arg is a headline and written, now do not write the headline comment for the main text
-			comment = COMMENT_TEXT
+			for argument in action['arguments']:
+				if isinstance(argument, int) or not argument:
+					# ignore strings that only consist of newlines
+					continue
+				argument = prep(argument)
+				write(comment, argument)
+		elif at == 'logbook':
+			for widget_def in action['arguments']:
+				if isinstance(widget_def, basestring):
+					content = widget_def.rstrip('\n')
+					# ignore strings that only consist of newlines
+					if content:
+						comment = COMMENT_TEXT
+						widget = prep(content)
+					else:
+						continue
+				elif widget_def[0] == 'Label' and widget_def[1]:
+					content = widget_def[1].rstrip('\n')
+					# ignore strings that only consist of newlines
+					if content:
+						comment = COMMENT_TEXT
+						widget = prep(content)
+					else:
+						continue
+				elif widget_def[0] == 'Headline':
+					comment = COMMENT_HEADING
+					widget = prep(widget_def[1].rstrip('\n'))
+				elif widget_def[0] in ('Image', 'Gallery', 'Pagebreak'):
+					continue
+				write(comment, widget)
 END
 
 xgettext --output-dir=po --output=$1.pot \
@@ -103,6 +129,10 @@ xgettext --output-dir=po --output=$1.pot \
          po/$1.py
 rm po/$1.py
 
+diff=$(git diff --numstat po/$1.pot |awk '{print $1;}')
+if [ $diff -le 2 ]; then      # only changed version and date (two lines)
+    git checkout -- po/$1.pot # => discard this template change
+fi
 
 if [ "x$2" = x ]; then
     exit
@@ -145,9 +175,21 @@ scenario['translation_status'] = '$numbers'
 
 for i, event in enumerate(scenario['events']):
 	for j, action in enumerate(event['actions']):
-		if action['type'] not in ('message', 'logbook', 'logbook_w'):
+		if action['type'] not in ('message', 'logbook'):
 			continue
-		action['arguments'] = map(translate, action['arguments'])
+		elif action['type'] == 'message':
+			action['arguments'] = map(translate, action['arguments'])
+		elif action['type'] == 'logbook':
+			old_args = action['arguments']
+			action['arguments'] = []
+			for widget in old_args:
+				if isinstance(widget, basestring):
+					action['arguments'].append(translate(widget.rstrip('\n')))
+				elif widget[0] in ('Label', 'Headline'):
+					text = translate(widget[1].rstrip('\n'))
+					action['arguments'].append([widget[0], text])
+				else:
+					action['arguments'].append(widget) # no translation for everything else
 		event['actions'][j] = action
 	scenario['events'][i] = event
 
@@ -155,7 +197,8 @@ print """
 # DON'T EDIT THIS FILE.
 
 # It was automatically generated with development/create_scenario_pot.sh using
-# translation files from pootle.
+# translation files from pootle. Documentation on this process is found here:
+#   development/copy_pofiles.sh
 """
 print yaml.dump(scenario, line_break=u'\n')
 END

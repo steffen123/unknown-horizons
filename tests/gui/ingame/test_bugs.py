@@ -20,7 +20,8 @@
 # ###################################################
 
 from horizons.command.unit import CreateUnit
-from horizons.constants import UNITS, GAME_SPEED, BUILDINGS
+from horizons.command.building import Tear
+from horizons.constants import UNITS, BUILDINGS
 from tests.gui import TestFinished, gui_test
 from tests.gui.helper import get_player_ship
 
@@ -33,7 +34,7 @@ def test_ticket_1352(gui):
 	yield # test needs to be a generator for now
 
 	player = gui.session.world.player
-	ship = CreateUnit(player.worldid, UNITS.FRIGATE, 68, 10)(player)
+	ship = CreateUnit(player.worldid, UNITS.FRIGATE_CLASS, 68, 10)(player)
 	x, y = ship.position.x, ship.position.y
 
 	gui.session.view.center(x, y)
@@ -61,8 +62,6 @@ def test_ticket_1368(gui):
 	"""
 	yield # test needs to be a generator for now
 
-	gui.session.speed_set(GAME_SPEED.TICK_RATES[-1])
-
 	# Wait until ai has settled down
 	world = gui.session.world
 	while not world.settlements:
@@ -83,6 +82,12 @@ def test_ticket_1369(gui):
 
 	ship = get_player_ship(gui.session)
 	gui.select([ship])
+
+	# ally players so they can trade
+	world = gui.session.world
+	for player in world.players:
+		if player is not ship.owner:
+			world.diplomacy.add_ally_pair( ship.owner, player )
 
 	# move ship near foreign warehouse and wait for it to arrive
 	gui.cursor_click(68, 23, 'right')
@@ -151,8 +156,6 @@ def test_ticket_1371(gui):
 	"""
 	yield
 
-	gui.session.speed_set(GAME_SPEED.TICK_RATES[-1])
-
 	ship = get_player_ship(gui.session)
 	gui.select([ship])
 
@@ -172,10 +175,7 @@ def test_ticket_1371(gui):
 	gui.cursor_click(52, 7, 'left')
 
 	# Select lumberjack
-	# TODO selecting should work when clicking on the map
-	settlement = gui.session.world.player.settlements[0]
-	lumberjack = settlement.get_buildings_by_id(BUILDINGS.LUMBERJACK_CLASS)[0]
-	gui.select([lumberjack])
+	gui.cursor_click(52, 7, 'left')
 
 	# Open build related tab
 	gui.trigger('tab_base', '1/action/default')
@@ -194,4 +194,178 @@ def test_ticket_1371(gui):
 	# Tab should still be there
 	assert gui.find(name='farm_overview_buildrelated')
 
+	yield TestFinished
+
+@gui_test(use_fixture='fife_exception_not_found', timeout=60)
+def test_ticket_1447(gui):
+	"""
+	Clicking on a sequence of buildings may make fife throw an exception.
+	"""
+	yield
+
+	lumberjack = gui.session.world.islands[0].ground_map[(23, 63)].object
+	assert(lumberjack.id == BUILDINGS.LUMBERJACK_CLASS)
+
+	fisher = gui.session.world.islands[0].ground_map[(20, 67)].object
+	assert(fisher.id == BUILDINGS.FISHERMAN_CLASS)
+
+	warehouse = gui.session.world.islands[0].ground_map[(18, 63)].object
+	assert(warehouse.id == BUILDINGS.WAREHOUSE_CLASS)
+
+	gui.cursor_click(20, 67, 'left')
+	yield
+
+	gui.cursor_click(23, 63, 'left')
+	yield
+
+	gui.cursor_click(18, 63, 'left')
+	yield # this could crash the game
+
+	yield TestFinished
+
+
+@gui_test(use_dev_map=True, timeout=120)
+def test_ticket_1515(gui):
+	"""
+	Unable to select an unowned resource deposit.
+	"""
+	yield # test needs to be a generator for now
+
+	gui.cursor_click(6, 17, 'left')
+
+	yield TestFinished
+
+
+@gui_test(use_dev_map=True, timeout=120)
+def test_ticket_1520(gui):
+	"""
+	Crash when completing build after outlined/related buildings were removed.
+	"""
+	yield
+
+	ship = get_player_ship(gui.session)
+	gui.select([ship])
+
+	gui.cursor_click(8, 2, 'right')
+	while (ship.position.x, ship.position.y) != (8, 2):
+		yield
+
+	# Found a settlement
+	gui.trigger('overview_trade_ship', 'found_settlement/action/default')
+	gui.cursor_click(10, 6, 'left')
+
+	ground_map = gui.session.world.islands[0].ground_map
+
+	# Build a tent
+	gui.trigger('mainhud', 'build/action/default')
+	gui.trigger('tab', 'button_1/action/default')
+	gui.cursor_click(7, 9, 'left')
+
+	assert ground_map[(7, 9)].object.id == BUILDINGS.RESIDENTIAL_CLASS
+
+	# Start building a mainsquare (not releasing left mouse button)
+	gui.trigger('tab', 'button_3/action/default')
+	gui.cursor_move(13, 11)
+	gui.cursor_press_button(13, 11, 'left')
+
+	# remove tent
+	Tear( ground_map[(7, 9)].object ).execute(gui.session)
+
+	# release mouse button, finish build
+	gui.cursor_release_button(13, 11, 'left')
+
+	yield TestFinished
+
+
+@gui_test(use_dev_map=True, timeout=120)
+def test_ticket_1509(gui):
+	"""
+	Crash when quickly switching between tent tabs.
+	"""
+	yield
+
+	ship = get_player_ship(gui.session)
+	gui.select([ship])
+
+	gui.cursor_click(8, 2, 'right')
+	while (ship.position.x, ship.position.y) != (8, 2):
+		yield
+
+	# Found a settlement
+	gui.trigger('overview_trade_ship', 'found_settlement/action/default')
+	gui.cursor_click(10, 6, 'left')
+
+	# Build a tent
+	gui.trigger('mainhud', 'build/action/default')
+	gui.trigger('tab', 'button_1/action/default')
+	gui.cursor_click(7, 10, 'left')
+
+	# Select tent
+	gui.cursor_click(7, 10, 'left')
+
+	# quickly switch between tabs
+	gui.trigger('tab_base', '1/action/default')
+	yield
+	gui.trigger('tab_base', '0/action/default')
+	yield
+	gui.trigger('tab_base', '1/action/default')
+
+	yield TestFinished
+
+
+@gui_test(use_fixture='boatbuilder', timeout=120)
+def test_ticket_1526(gui):
+	"""
+	Multiselection with Ctrl crashes on many combinations.
+	"""
+	yield
+
+	# Select main square and then boat builder
+	gui.cursor_click(52, 12, 'left')
+	gui.cursor_click(64, 10, 'left', ctrl=True)
+
+	# Select same building twice
+	gui.cursor_click(52, 12, 'left')
+	gui.cursor_click(52, 12, 'left', ctrl=True)
+
+	yield TestFinished
+
+
+@gui_test(use_dev_map=True, timeout=120)
+def test_pavilion_build_crash_built_via_settler_related_tab(gui):
+	"""
+	"""
+	yield
+
+	ship = get_player_ship(gui.session)
+	gui.select([ship])
+
+	gui.cursor_click(59, 1, 'right')
+	while (ship.position.x, ship.position.y) != (59, 1):
+		yield
+
+	# Found settlement
+	gui.trigger('overview_trade_ship', 'found_settlement/action/default')
+
+	gui.cursor_click(56, 3, 'left')
+
+	gui.trigger('mainhud', 'build/action/default')
+
+	# Build settler
+	gui.trigger('tab', 'button_1/action/default')
+	gui.cursor_click(52, 7, 'left')
+
+	# Select settler
+	gui.cursor_click(52, 7, 'left')
+
+	# Open build related tab
+	gui.trigger('tab_base', '1/action/default')
+
+	# Select pavilion
+	gui.trigger('farm_overview_buildrelated', 'build5/action/default')
+
+	# Plant it
+	gui.cursor_click(49, 6, 'left')
+
+	# if we survive until here, the bug hasn't happened
 	yield TestFinished

@@ -20,7 +20,6 @@
 # ###################################################
 
 from horizons.world.resourcehandler import ResourceHandler
-from horizons.util.changelistener import metaChangeListenerDecorator
 from horizons.gui.tabs import ProductionOverviewTab
 from horizons.world.production.producer import Producer
 
@@ -38,59 +37,33 @@ class BuildingResourceHandler(ResourceHandler):
 
 	def __init(self):
 		self.island.provider_buildings.append(self)
+		if self.has_component(Producer):
+			self.get_component(Producer).add_activity_changed_listener(self._set_running_costs_to_status)
+			self._set_running_costs_to_status(None, self.get_component(Producer).is_active())
 
 	def load(self, db, worldid):
 		super(BuildingResourceHandler, self).load(db, worldid)
-		self._set_running_costs_to_status()
 		self.__init()
 
 	def remove(self):
 		super(BuildingResourceHandler, self).remove()
 		self.island.provider_buildings.remove(self)
-
-	def set_active(self, production=None, active=True):
 		if self.has_component(Producer):
-			self.get_component(Producer).set_active(production, active)
-		# set running costs, if activity status has changed.
-		self._set_running_costs_to_status()
+			self.get_component(Producer).remove_activity_changed_listener(self._set_running_costs_to_status)
 
-	def _set_running_costs_to_status(self):
-		if self.running_costs_active():
-			if self.has_component(Producer) and not self.get_component(Producer).is_active():
-				self.toggle_costs()
-		else:
-			if self.has_component(Producer) and self.get_component(Producer).is_active():
-				self.toggle_costs()
-		self._changed()
+	def _set_running_costs_to_status(self, caller, is_active):
+		current_setting_is_active = self.running_costs_active()
+		if current_setting_is_active and not is_active:
+			self.toggle_costs()
+			self._changed()
+		elif not current_setting_is_active and is_active:
+			self.toggle_costs()
+			self._changed()
 
-@metaChangeListenerDecorator("building_production_finished")
-class ProducerBuilding(BuildingResourceHandler):
-	"""Class for buildings, that produce something.
-	Uses BuildingResourceHandler additionally to ResourceHandler, to enable building-specific
-	behaviour"""
-	tabs = (ProductionOverviewTab,) # don't show inventory, just production (i.e. running costs)
 
-	def __init__(self, start_finished=False, *args, **kwargs):
-		super(ProducerBuilding, self).__init__(*args, **kwargs)
-
-	def add_production(self, production):
-		self.get_component(Producer).add_production(production)
-		production.add_production_finished_listener(self._production_finished)
-
-	def _production_finished(self, production):
-		"""Gets called when a production finishes."""
-		produced_res = production.get_produced_res()
-		self.on_building_production_finished(produced_res)
-
-	def get_output_blocked_time(self):
-		""" gets the amount of time in range [0, 1] the output storage is blocked for the AI """
-		return max(production.get_output_blocked_time() for production in self.get_component(Producer).get_productions())
-
-class UnitProducerBuilding(ProducerBuilding):
+class UnitProducerBuilding(BuildingResourceHandler):
 	"""Class for building that produce units.
 	Uses a BuildingResourceHandler additionally to ResourceHandler to enable
 	building specific behaviour."""
+	pass
 
-	def __init__(self, **kwargs):
-		super(UnitProducerBuilding, self).__init__(**kwargs)
-		self.set_active(active=False)

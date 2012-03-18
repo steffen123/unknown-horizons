@@ -26,6 +26,7 @@ import os
 import os.path
 import glob
 import time
+import re
 import yaml
 
 from horizons.constants import PATHS, VERSION
@@ -53,6 +54,7 @@ class SavegameManager(object):
 
 	savegame_dir = os.path.join(PATHS.USER_DIR, "save")
 	autosave_dir = os.path.join(savegame_dir, "autosave")
+	multiplayersave_dir = os.path.join(savegame_dir, "multiplayer_save")
 	quicksave_dir = os.path.join(savegame_dir, "quicksave")
 	maps_dir = os.path.join("content", "maps")
 	scenario_maps_dir = os.path.join("content", "scenariomaps")
@@ -66,30 +68,29 @@ class SavegameManager(object):
 	autosave_basename = "autosave-"
 	quicksave_basename = "quicksave-"
 
+	multiplayersave_name_regex = r"^[0-9a-zA-Z _.-]+$" # don't just blindly allow everything
+
 	# Use {{}} because this string is formatted twice and
 	# {timestamp} is replaced in the second format() call.
 	save_filename_timeformat = u"{prefix}{{timestamp:.4f}}--%Y-%m-%d--%H-%M.{ext}"
 	autosave_filenamepattern = save_filename_timeformat.format(prefix=autosave_basename, ext=savegame_extension)
 	quicksave_filenamepattern = save_filename_timeformat.format(prefix=quicksave_basename, ext=savegame_extension)
 
-	display_timeformat = "%Y/%m/%d %H:%M"
-
 	savegame_screenshot_width = 290
 
 	# metadata of a savegame with default values
-	savegame_metadata = { 'timestamp' : -1,	'savecounter' : 0, 'savegamerev' : 0, 'rng_state' : ""  }
+	savegame_metadata = { 'timestamp' : -1,	'savecounter' : 0, 'savegamerev' : 0, 'rng_state' : "" }
 	savegame_metadata_types = { 'timestamp' : float, 'savecounter' : int, 'savegamerev': int, \
-	                            'rng_state' : str }
+	                            'rng_state' : str } # 'screenshot' : NoneType }
 
 	campaign_status_file = os.path.join(savegame_dir, 'campaign_status.yaml')
 
 	@classmethod
 	def init(cls):
 		# create savegame directory if it does not exist
-		if not os.path.isdir(cls.autosave_dir):
-			os.makedirs(cls.autosave_dir)
-		if not os.path.isdir(cls.quicksave_dir):
-			os.makedirs(cls.quicksave_dir)
+		for d in cls.autosave_dir, cls.quicksave_dir, cls.multiplayersave_dir:
+			if not os.path.isdir(d):
+				os.makedirs(d)
 
 	@classmethod
 	def __get_displaynames(cls, files):
@@ -100,7 +101,7 @@ class SavegameManager(object):
 			if savegameinfo['timestamp'] == -1:
 				return ""
 			else:
-				return time.strftime(cls.display_timeformat, time.localtime(savegameinfo['timestamp']))
+				return time.strftime('%c', time.localtime(savegameinfo['timestamp'])).decode('utf-8')
 
 		for f in files:
 			if f.startswith(cls.autosave_dir):
@@ -154,6 +155,28 @@ class SavegameManager(object):
 		return name
 
 	@classmethod
+	def create_multiplayer_quicksave_name(cls):
+		"""Will create a name, not a path"""
+		return "quicksave-" + str(time.time())
+
+	@classmethod
+	def create_multiplayer_autosave_name(cls):
+		"""Will create a name, not a path"""
+		return "autosave-" + str(time.time())
+
+	@classmethod
+	def create_multiplayersave_filename(cls, name):
+		"""Returns the filename for a multiplayer save"""
+		if not re.match(cls.multiplayersave_name_regex, name):
+			err = "Smelly multiplayer filename detected: " + name
+			cls.log.error(err)
+			raise RuntimeError(err)
+
+		name = u"{directory}{sep}{name}".format(directory=cls.multiplayersave_dir, sep=os.sep, name=name + "." + cls.savegame_extension)
+		cls.log.debug("Savegamemanager: creating multiplayersave-filename: %s", name)
+		return name
+
+	@classmethod
 	def delete_dispensable_savegames(cls, autosaves = False, quicksaves = False):
 		"""Delete savegames that are no longer needed
 		@param autosaves, quicksaves: Bool, set to true if this kind of saves should be cleaned
@@ -189,11 +212,15 @@ class SavegameManager(object):
 		db = DbReader(savegamefile)
 		metadata = cls.savegame_metadata.copy()
 
-		for key in metadata.iterkeys():
-			result = db("SELECT `value` FROM `metadata` WHERE `name` = ?", key)
-			if len(result) > 0:
-				assert(len(result) == 1)
-				metadata[key] = cls.savegame_metadata_types[key](result[0][0])
+		try:
+			for key in metadata.iterkeys():
+				result = db("SELECT `value` FROM `metadata` WHERE `name` = ?", key)
+				if len(result) > 0:
+					assert(len(result) == 1)
+					metadata[key] = cls.savegame_metadata_types[key](result[0][0])
+		except sqlite3.OperationalError as e:
+			print 'Warning: Can\'t read savegame %s: %s' % (savegamefile, e)
+			return metadata
 
 		screenshot_data = None
 		try:
@@ -258,11 +285,24 @@ class SavegameManager(object):
 		return cls.__get_saves_from_dirs([cls.maps_dir], include_displaynames, None, False)
 
 	@classmethod
+	def get_map(cls, map_name):
+		return os.path.join(cls.maps_dir, map_name + "." + cls.savegame_extension)
+
+	@classmethod
+	def get_multiplayersave_map(cls, name):
+		return os.path.join(cls.multiplayersave_dir, name + "." + cls.savegame_extension)
+
+	@classmethod
 	def get_saves(cls, include_displaynames = True):
 		"""Returns all savegames"""
 		cls.log.debug("Savegamemanager: get saves from %s, %s, %s", cls.savegame_dir,
 		              cls.autosave_dir, cls.quicksave_dir)
 		return cls.__get_saves_from_dirs([cls.savegame_dir, cls.autosave_dir, cls.quicksave_dir], include_displaynames, None, True)
+
+	@classmethod
+	def get_multiplayersaves(cls, include_displaynames = True):
+		cls.log.debug("Savegamemanager: get saves from %s, %s, %s", cls.multiplayersave_dir)
+		return cls.__get_saves_from_dirs([cls.multiplayersave_dir], include_displaynames, None, True)
 
 	@classmethod
 	def get_quicksaves(cls, include_displaynames = True):
@@ -279,7 +319,6 @@ class SavegameManager(object):
 	@classmethod
 	def get_available_scenarios(cls, include_displaynames = True, locales = None):
 		"""Returns available scenarios (depending on the campaign(s) status)"""
-		scenario_files = {}
 		afiles = []
 		anames = []
 		sfiles, snames = cls.get_scenarios(include_displaynames = True)

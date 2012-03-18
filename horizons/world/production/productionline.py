@@ -23,11 +23,11 @@
 import horizons.main
 
 class ProductionLine(object):
-	"""Class that collects the production line data"""
+	"""Class that collects the production line data."""
 
-	def __init__(self, id, data={}):
+	def __init__(self, id, data):
 		"""Inits self from yaml data"""
-		self.__data = data
+		self.__data = data or {}
 		self.id = id
 		self.__init()
 
@@ -51,7 +51,8 @@ class ProductionLine(object):
 				self.consumed_res[res] = amount
 		# Stores unit_id: amount entries, if units are to be produced by this production line
 		self.unit_production = {}
-		for unit, amount in horizons.main.db("SELECT unit, amount FROM unit_production WHERE production_line = ?", self.id):
+		# TODO: move this data into yaml files
+		for unit, amount in horizons.main.db.cached_query("SELECT unit, amount FROM unit_production WHERE production_line = ?", self.id):
 			self.unit_production[int(unit)] = amount # Store the correct unit id =>  -1.000.000
 
 		self._init_finished = True
@@ -105,3 +106,9 @@ class ProductionLine(object):
 				  "CONSUMED" : self.consumed_res,
 				  "PRODUCED" : self.produced_res,
 				  "UNIT"     : self.unit_production }[t][res] = amount
+
+
+	def get_original_copy(self):
+		"""Returns a copy of this production, in its original state, no changes
+		applied"""
+		return ProductionLine(self.id, self.__data)

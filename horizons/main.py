@@ -19,22 +19,21 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
-"""This is the main game file, it used to store some global information and to handle
-   the main menu, as well as to initialize new gamesessions.
-	 <deprecated>horizons.main provides some globals
-   that can be used throughout the code just by importing 'horizons.main'. These are the
-   globals:</deprecated>.
-   * db - the horizons.dbreader instance, used to retrieve data from the database.
-   * fife - if a game is running. horizons.fife provides the running engine instance.
-   * session - horizons.session instance - check horizons/session.py for more information
+"""This is the main game file. It has grown over the years from a collection of global
+variables (sic!) to something holding mainly the main gui and game session, as well as
+a reference to the engine object (fife).
+The functions below are used to start different kinds of games
 
-   TUTORIAL:
-   Continue to horizons.session for further ingame digging.
-   """
+TUTORIAL:
+Continue to horizons.session for further ingame digging.
+"""
 
 import os
+import sys
 import os.path
 import random
+import json
+import traceback
 import threading
 import thread # for thread.error raised by threading.Lock.release
 import shutil
@@ -46,7 +45,7 @@ from horizons.gui import Gui
 from horizons.extscheduler import ExtScheduler
 from horizons.constants import AI, COLORS, GAME, PATHS, NETWORK, SINGLEPLAYER, GAME_SPEED
 from horizons.network.networkinterface import NetworkInterface
-from horizons.util import ActionSetLoader, DifficultySettings, TileSetLoader, Color, parse_port, DbReader, Callback
+from horizons.util import ActionSetLoader, DifficultySettings, TileSetLoader, Color, parse_port, Callback
 from horizons.util.uhdbaccessor import UhDbAccessor, read_savegame_template
 
 # private module pointers of this module
@@ -59,11 +58,14 @@ _modules = Modules()
 # garbage collection
 __string_previewer = None
 
-def start(command_line_arguments):
-	"""Starts the horizons.
-	@param command_line_arguments: options object from optparse.OptionParser. see run_uh.py.
+command_line_arguments = None
+
+def start(_command_line_arguments):
+	"""Starts the horizons. Will drop you to the main menu.
+	@param _command_line_arguments: options object from optparse.OptionParser. see run_uh.py.
 	"""
-	global fife, db, debug, preloading
+	global fife, db, debug, preloading, command_line_arguments
+	command_line_arguments = _command_line_arguments
 	# NOTE: globals are designwise the same thing as singletons. they don't look pretty.
 	#       here, we only have globals that are either trivial, or only one instance may ever exist.
 
@@ -86,6 +88,13 @@ def start(command_line_arguments):
 		except ValueError:
 			print "Error: Invalid syntax in --mp-master commandline option. Port must be a number between 1 and 65535."
 			return False
+
+	if command_line_arguments.generate_minimap: # we've been called as subprocess to generate a map preview
+		from horizons.gui.modules.singleplayermenu import MapPreview
+		MapPreview.generate_minimap( * json.loads(
+		  command_line_arguments.generate_minimap
+		  ) )
+		sys.exit(0)
 
 	# init fife before mp_bind is parsed, since it's needed there
 	fife = Fife()
@@ -131,8 +140,12 @@ def start(command_line_arguments):
 	if command_line_arguments.log_gui:
 		if command_line_arguments.gui_test:
 			raise Exception("Logging gui interactions doesn't work when running tests.")
-		from tests.gui.logger import setup_gui_logger
-		setup_gui_logger()
+		try:
+			from tests.gui.logger import setup_gui_logger
+			setup_gui_logger()
+		except ImportError:
+			print "Gui logging requires code that is only present in the repository and is not being installed."
+			return False
 
 	# GUI tests always run with sound disabled and SDL (so they can run under xvfb).
 	# Needs to be done before engine is initialized.
@@ -175,30 +188,41 @@ def start(command_line_arguments):
 	# start something according to commandline parameters
 	startup_worked = True
 	if command_line_arguments.start_dev_map:
-		startup_worked = _start_dev_map(command_line_arguments.ai_players, command_line_arguments.human_ai)
+		startup_worked = _start_dev_map(command_line_arguments.ai_players, command_line_arguments.human_ai, command_line_arguments.force_player_id)
 	elif command_line_arguments.start_random_map:
-		startup_worked = _start_random_map(command_line_arguments.ai_players, command_line_arguments.human_ai)
+		startup_worked = _start_random_map(command_line_arguments.ai_players, command_line_arguments.human_ai, force_player_id=command_line_arguments.force_player_id)
 	elif command_line_arguments.start_specific_random_map is not None:
 		startup_worked = _start_random_map(command_line_arguments.ai_players, command_line_arguments.human_ai, \
-			seed=command_line_arguments.start_specific_random_map)
+			seed=command_line_arguments.start_specific_random_map, force_player_id=command_line_arguments.force_player_id)
 	elif command_line_arguments.start_map is not None:
 		startup_worked = _start_map(command_line_arguments.start_map, command_line_arguments.ai_players, \
-			command_line_arguments.human_ai)
+			command_line_arguments.human_ai, force_player_id=command_line_arguments.force_player_id)
 	elif command_line_arguments.start_scenario is not None:
-		startup_worked = _start_map(command_line_arguments.start_scenario, 0, False, True)
+		startup_worked = _start_map(command_line_arguments.start_scenario, 0, False, True, force_player_id=command_line_arguments.force_player_id)
 	elif command_line_arguments.start_campaign is not None:
-		startup_worked = _start_campaign(command_line_arguments.start_campaign)
+		startup_worked = _start_campaign(command_line_arguments.start_campaign, force_player_id=command_line_arguments.force_player_id)
 	elif command_line_arguments.load_map is not None:
 		startup_worked = _load_map(command_line_arguments.load_map, command_line_arguments.ai_players, \
-			command_line_arguments.human_ai)
+			command_line_arguments.human_ai, command_line_arguments.force_player_id)
 	elif command_line_arguments.load_quicksave is not None:
 		startup_worked = _load_last_quicksave()
 	elif command_line_arguments.stringpreview:
-		first_map = SavegameManager.get_maps()[0][0]
-		startup_worked = _start_map(first_map, ai_players=0, human_ai=False, trader_enabled=False, pirate_enabled=False)
+		tiny = [ i for i in SavegameManager.get_maps()[0] if 'tiny' in i ]
+		if not tiny:
+			tiny = SavegameManager.get_map()[0]
+		startup_worked = _start_map(tiny[0], ai_players=0, human_ai=False, trader_enabled=False, pirate_enabled=False, \
+			force_player_id=command_line_arguments.force_player_id)
 		from development.stringpreviewwidget import StringPreviewWidget
 		__string_previewer = StringPreviewWidget(_modules.session)
 		__string_previewer.show()
+	elif command_line_arguments.create_mp_game:
+		_modules.gui.show_main()
+		_modules.gui.show_multi()
+		_modules.gui.create_default_mp_game()
+	elif command_line_arguments.join_mp_game:
+		_modules.gui.show_main()
+		_modules.gui.show_multi()
+		_modules.gui.join_mp_game()
 	else: # no commandline parameter, show main screen
 		_modules.gui.show_main()
 		if not command_line_arguments.nopreload:
@@ -215,24 +239,25 @@ def start(command_line_arguments):
 		from tests.gui import TestRunner
 		TestRunner(fife, command_line_arguments.gui_test)
 
+	if command_line_arguments.interactive_shell:
+		from horizons.util import interactive_shell
+		interactive_shell.start(fife)
+
 	fife.run()
 
 def quit():
 	"""Quits the game"""
 	global fife
-	if _modules.session is not None and _modules.session.is_alive:
-		_modules.session.end()
-	preload_game_join(preloading)
-	ExtScheduler.destroy_instance()
 	fife.quit()
 
 def start_singleplayer(map_file, playername = "Player", playercolor = None, is_scenario = False, \
 		campaign = None, ai_players = 0, human_ai = False, trader_enabled = True, pirate_enabled = True, \
-		natural_resource_multiplier = 1):
+		natural_resource_multiplier = 1, force_player_id = None, disasters_enabled = True):
 	"""Starts a singleplayer game
 	@param map_file: path to map file
 	@param ai_players: number of AI players to start (excludes possible human AI)
 	@param human_ai: whether to start the human player as an AI
+	@param force_player_id: the worldid of the selected human player or default if None (debug option)
 	"""
 	global fife, preloading, db
 	preload_game_join(preloading)
@@ -278,7 +303,7 @@ def start_singleplayer(map_file, playername = "Player", playercolor = None, is_s
 	from horizons.scenario import InvalidScenarioFileFormat # would create import loop at top
 	try:
 		_modules.session.load(map_file, players, trader_enabled, pirate_enabled, natural_resource_multiplier, \
-			is_scenario = is_scenario, campaign = campaign)
+			is_scenario = is_scenario, campaign = campaign, force_player_id = force_player_id, disasters_enabled=disasters_enabled)
 	except InvalidScenarioFileFormat as e:
 		raise
 	except Exception as e:
@@ -289,13 +314,18 @@ def start_singleplayer(map_file, playername = "Player", playercolor = None, is_s
 		print "Failed to load", map_file
 		traceback.print_exc()
 		if _modules.session is not None and _modules.session.is_alive:
-			_modules.session.end()
+			try:
+				_modules.session.end()
+			except Exception as e:
+				print
+				traceback.print_exc()
+				print "Additionally to failing when loading, cleanup afterwards also failed"
 		_modules.gui.show_main()
 		headline = _(u"Failed to start/load the game")
 		descr = _(u"The game you selected couldn't be started.") + u" " +\
 			      _("The savegame might be broken or has been saved with an earlier version.")
 		_modules.gui.show_error_popup(headline, descr)
-		load_game(ai_players, human_ai)
+		load_game(ai_players, human_ai, force_player_id=force_player_id)
 
 
 def prepare_multiplayer(game, trader_enabled = True, pirate_enabled = True, natural_resource_multiplier = 1):
@@ -324,14 +354,19 @@ def prepare_multiplayer(game, trader_enabled = True, pirate_enabled = True, natu
 	random = sum([ int(uuid[i : i + 2], 16) for i in range(0, len(uuid), 2) ])
 	_modules.session = MPSession(_modules.gui, db, NetworkInterface(), rng_seed=random)
 	# NOTE: this data passing is only temporary, maybe use a player class/struct
-	_modules.session.load("content/maps/" + game.get_map_name() + ".sqlite", \
+	if game.load:
+		map_file = SavegameManager.get_multiplayersave_map( game.get_map_name() )
+	else:
+		map_file = SavegameManager.get_map( game.get_map_name() )
+
+	_modules.session.load(map_file,
 	                      game.get_player_list(), trader_enabled, pirate_enabled, natural_resource_multiplier)
 
 def start_multiplayer(game):
 	_modules.session.start()
 
 def load_game(ai_players=0, human_ai=False, savegame=None, is_scenario=False, campaign=None,
-              pirate_enabled=True, trader_enabled=True):
+              pirate_enabled=True, trader_enabled=True, force_player_id=None):
 	"""Shows select savegame menu if savegame is none, then loads the game"""
 	if savegame is None:
 		savegame = _modules.gui.show_select_savegame(mode='load')
@@ -340,7 +375,8 @@ def load_game(ai_players=0, human_ai=False, savegame=None, is_scenario=False, ca
 	_modules.gui.show_loading_screen()
 #TODO
 	start_singleplayer(savegame, is_scenario = is_scenario, campaign = campaign, \
-		ai_players=ai_players, human_ai=human_ai, pirate_enabled=pirate_enabled, trader_enabled=trader_enabled)
+		ai_players=ai_players, human_ai=human_ai, pirate_enabled=pirate_enabled, \
+		trader_enabled=trader_enabled, force_player_id=force_player_id)
 	return True
 
 
@@ -364,13 +400,15 @@ def _init_gettext(fife):
 
 ## GAME START FUNCTIONS
 
-def _start_dev_map(ai_players, human_ai):
-	# start the development map (it's the first one)
-	first_map = SavegameManager.get_maps()[0][0]
-	load_game(ai_players, human_ai, first_map)
+def _start_dev_map(ai_players, human_ai, force_player_id):
+	# start the development map
+	for m in SavegameManager.get_maps()[0]:
+		if 'development' in m:
+			break
+	load_game(ai_players, human_ai, m, force_player_id=force_player_id)
 	return True
 
-def _start_map(map_name, ai_players=0, human_ai=False, is_scenario=False, campaign=None, pirate_enabled=True, trader_enabled=True):
+def _start_map(map_name, ai_players=0, human_ai=False, is_scenario=False, campaign=None, pirate_enabled=True, trader_enabled=True, force_player_id=None):
 	"""Start a map specified by user
 	@param map_name: name of map or path to map
 	@return: bool, whether loading succeded"""
@@ -403,15 +441,15 @@ def _start_map(map_name, ai_players=0, human_ai=False, is_scenario=False, campai
 			print os.path.basename(match)
 		return False
 	load_game(ai_players, human_ai, map_file, is_scenario, campaign=campaign,
-	          trader_enabled=trader_enabled, pirate_enabled=pirate_enabled)
+	          trader_enabled=trader_enabled, pirate_enabled=pirate_enabled, force_player_id=force_player_id)
 	return True
 
-def _start_random_map(ai_players, human_ai, seed = None):
+def _start_random_map(ai_players, human_ai, seed = None, force_player_id = None):
 	from horizons.util import random_map
-	start_singleplayer(random_map.generate_map_from_seed(seed), ai_players=ai_players, human_ai=human_ai)
+	start_singleplayer(random_map.generate_map_from_seed(seed), ai_players=ai_players, human_ai=human_ai, force_player_id=force_player_id)
 	return True
 
-def _start_campaign(campaign_name):
+def _start_campaign(campaign_name, force_player_id=None):
 	"""Finds the first scenario in this campaign and
 	loads it.
 	@return: bool, whether loading succeded"""
@@ -448,9 +486,10 @@ def _start_campaign(campaign_name):
 	scenarios = [sc.get('level') for sc in campaign.get('scenarios',[])]
 	if not scenarios:
 		return False
-	return _start_map(scenarios[0], 0, False, is_scenario = True, campaign = {'campaign_name': campaign_name, 'scenario_index': 0, 'scenario_name': scenarios[0]})
+	return _start_map(scenarios[0], 0, False, is_scenario = True, campaign = {'campaign_name': campaign_name, 'scenario_index': 0, 'scenario_name': scenarios[0]}, \
+		force_player_id=force_player_id)
 
-def _load_map(savegame, ai_players, human_ai):
+def _load_map(savegame, ai_players, human_ai, force_player_id=None):
 	"""Load a map specified by user.
 	@param savegame: eiter the displayname of a savegame or a path to a savegame
 	@return: bool, whether loading succeded"""
@@ -482,10 +521,10 @@ def _load_map(savegame, ai_players, human_ai):
 		for match in map_file.splitlines():
 			print os.path.basename(match)
 		return False
-	load_game(savegame=map_file)
+	load_game(savegame=map_file, force_player_id=force_player_id)
 	return True
 
-def _load_last_quicksave():
+def _load_last_quicksave(force_player_id=None):
 	"""Load last quicksave
 	@return: bool, whether loading succeded"""
 	save_files = SavegameManager.get_quicksaves()[0]
@@ -493,7 +532,7 @@ def _load_last_quicksave():
 		print "Error: No quicksave found."
 		return False
 	save = max(save_files)
-	load_game(savegame=save)
+	load_game(savegame=save, force_player_id=force_player_id)
 	return True
 
 def _create_main_db():
@@ -548,4 +587,3 @@ def preload_game_join(preloading):
 			preloading[1].release()
 		except thread.error:
 			pass # due to timing issues, the lock might be released already
-

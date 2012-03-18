@@ -24,7 +24,7 @@ import os
 
 import horizons.main
 
-from horizons.constants import BUILDINGS, PRODUCTION, GAME_SPEED
+from horizons.constants import BUILDINGS, PRODUCTION
 from horizons.world.production.producer import Producer
 from tests.gui import TestFinished, gui_test
 
@@ -38,9 +38,10 @@ def test_ticket_1224(gui):
 	yield # test needs to be a generator for now
 
 	settlement = gui.session.world.player.settlements[0]
-	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
+	boatbuilder = settlement.buildings_by_id[BUILDINGS.BOATBUILDER_CLASS][0]
 
-	gui.select([boatbuilder])
+	# Select boat builder
+	gui.cursor_click(64, 10, 'left')
 
 	def running_costs():
 		c = gui.find(name='BB_main_tab')
@@ -74,9 +75,10 @@ def test_ticket_1294(gui):
 	yield # test needs to be a generator for now
 
 	settlement = gui.session.world.player.settlements[0]
-	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
+	boatbuilder = settlement.buildings_by_id[BUILDINGS.BOATBUILDER_CLASS][0]
 
-	gui.select([boatbuilder])
+	# Select boat builder
+	gui.cursor_click(64, 10, 'left')
 
 	# Select trade ships tab
 	gui.trigger('tab_base', '1/action/default')
@@ -92,8 +94,6 @@ def test_ticket_1294(gui):
 
 	# Build frigate
 	gui.trigger('boatbuilder_war1', 'BB_build_war1_1/action/default')
-
-	gui.session.speed_set(GAME_SPEED.TICK_RATES[-1]) # speed things up a bit
 
 	# Wait until production ends
 	producer = boatbuilder.get_component(Producer)
@@ -116,10 +116,8 @@ def test_remove_from_queue(gui):
 	"""
 	yield # test needs to be a generator for now
 
-	settlement = gui.session.world.player.settlements[0]
-	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
-
-	gui.select([boatbuilder])
+	# Select boat builder
+	gui.cursor_click(64, 10, 'left')
 
 	# Select trade ships tab
 	gui.trigger('tab_base', '1/action/default')
@@ -134,7 +132,7 @@ def test_remove_from_queue(gui):
 	gui.trigger('boatbuilder_war1', 'BB_build_war1_1/action/default')
 
 	# Cancel queue -> crash
-	gui.trigger('BB_main_tab', 'queue_container/mouseClicked/default')
+	gui.trigger('BB_main_tab', 'queue_elem_0/mouseClicked/default')
 
 	yield TestFinished
 
@@ -145,10 +143,8 @@ def test_cancel_ticket_1424(gui):
 	"""
 	yield # test needs to be a generator for now
 
-	settlement = gui.session.world.player.settlements[0]
-	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
-
-	gui.select([boatbuilder])
+	# Select boat builder
+	gui.cursor_click(64, 10, 'left')
 
 	# Select trade ships tab
 	gui.trigger('tab_base', '1/action/default')
@@ -175,10 +171,8 @@ def test_save_load_ticket_1421(gui):
 	"""
 	yield # test needs to be a generator for now
 
-	settlement = gui.session.world.player.settlements[0]
-	boatbuilder = settlement.get_buildings_by_id(BUILDINGS.BOATBUILDER_CLASS)[0]
-
-	gui.select([boatbuilder])
+	# Select boat builder
+	gui.cursor_click(64, 10, 'left')
 
 	# Select trade ships tab
 	gui.trigger('tab_base', '1/action/default')
@@ -195,9 +189,93 @@ def test_save_load_ticket_1421(gui):
 	fd, filename = tempfile.mkstemp()
 	os.close(fd)
 
-	session = settlement.session
-	assert session.save(savegamename=filename)
+	assert gui.session.save(savegamename=filename)
 
 	horizons.main.load_game( savegame=filename )
+
+	yield TestFinished
+
+
+@gui_test(use_fixture='boatbuilder', timeout=120)
+def test_ticket_1513(gui):
+	"""
+	Boat builder costs don't go back to normal after cancelling a ship.
+	"""
+	yield # test needs to be a generator for now
+
+	settlement = gui.session.world.player.settlements[0]
+	boatbuilder = settlement.buildings_by_id[BUILDINGS.BOATBUILDER_CLASS][0]
+
+	# Select boat builder
+	gui.cursor_click(64, 10, 'left')
+
+	def running_costs():
+		c = gui.find(name='BB_main_tab')
+		return c.findChild(name='running_costs').text
+
+	# Check (inactive) running costs
+	assert running_costs() == '10', "Expected 10, got %s" % running_costs()
+
+	# Select trade ships tab
+	gui.trigger('tab_base', '1/action/default')
+
+	# Build huker
+	gui.trigger('boatbuilder_trade', 'BB_build_trade_1/action/default')
+
+	# Wait until production starts
+	producer = boatbuilder.get_component(Producer)
+	while producer._get_current_state() != PRODUCTION.STATES.producing:
+		yield
+
+	# Check (active) running costs
+	assert running_costs() == '25', "Expected 25, got %s" % running_costs()
+
+	yield
+
+	# Cancel build
+	gui.trigger('BB_main_tab', 'BB_cancel_button/mouseClicked/default')
+
+	# Check (inactive) running costs
+	assert running_costs() == '10', "Expected 10, got %s" % running_costs()
+
+	yield TestFinished
+
+
+@gui_test(use_fixture='boatbuilder', timeout=120)
+def test_ticket_1514(gui):
+	"""
+	Cancelling a ship doesn't update the ship builder's tab.
+	"""
+	yield # test needs to be a generator for now
+
+	settlement = gui.session.world.player.settlements[0]
+	boatbuilder = settlement.buildings_by_id[BUILDINGS.BOATBUILDER_CLASS][0]
+
+	# Select boat builder
+	gui.cursor_click(64, 10, 'left')
+
+	# nothing beeing build, no cancel button visible
+	assert not gui.find('BB_cancel_button')
+
+	# Select trade ships tab
+	gui.trigger('tab_base', '1/action/default')
+
+	# Build huker
+	gui.trigger('boatbuilder_trade', 'BB_build_trade_1/action/default')
+
+	assert gui.find('BB_cancel_button')
+
+	# Wait until production starts
+	producer = boatbuilder.get_component(Producer)
+	while producer._get_current_state() != PRODUCTION.STATES.producing:
+		yield
+
+	yield
+
+	# Cancel build
+	gui.trigger('BB_main_tab', 'BB_cancel_button/mouseClicked/default')
+
+	# The tab should have changed, no cancel button visible
+	assert not gui.find('BB_cancel_button')
 
 	yield TestFinished

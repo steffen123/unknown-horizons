@@ -23,6 +23,9 @@ import os
 import os.path
 import logging
 import json
+import traceback
+import time
+from random import Random
 
 import horizons.main
 
@@ -30,6 +33,7 @@ from horizons.ai.aiplayer import AIPlayer
 from horizons.gui.ingamegui import IngameGui
 from horizons.gui.mousetools import SelectionTool, PipetteTool, TearingTool, BuildingTool, AttackingTool
 from horizons.command.building import Tear
+from horizons.util.dbreader import DbReader
 from horizons.command.unit import RemoveUnit
 from horizons.gui.keylisteners import IngameKeyListener
 from horizons.scheduler import Scheduler
@@ -39,30 +43,42 @@ from horizons.gui import Gui
 from horizons.world import World
 from horizons.entities import Entities
 from horizons.util import WorldObject, LivingObject, livingProperty, SavegameAccessor
+from horizons.util.uhdbaccessor import read_savegame_template
 from horizons.util.lastactiveplayersettlementmanager import LastActivePlayerSettlementManager
 from horizons.world.component.namedcomponent import NamedComponent
+from horizons.world.component.selectablecomponent import SelectableComponent
 from horizons.savegamemanager import SavegameManager
 from horizons.scenario import ScenarioEventHandler
 from horizons.world.component.ambientsoundcomponent import AmbientSoundComponent
 from horizons.constants import GAME_SPEED, PATHS
+from horizons.util.messaging.messagebus import MessageBus
+from horizons.world.managers.statusiconmanager import StatusIconManager
 
 class Session(LivingObject):
 	"""Session class represents the games main ingame view and controls cameras and map loading.
+	It is alive as long as a game is running.
+	Many objects require a reference to this, which makes it a pseudo-global, from what we would
+	like to move away long-term. This is where we hope the components come into play, which
+	you will encounter later
 
 	This is the most important class if you are going to hack on Unknown Horizons, it provides most of
 	the important ingame variables.
 	Here's a small list of commonly used attributes:
-	* manager - horizons.manager instance. Used to execute commands that need to be tick,
-				synchronized check the class for more information.
-	* scheduler - horizons.scheduler instance. Used to execute timed events that do not effect
-	              network games but rather control the local simulation.
+
+	* world - horizons.world instance of the currently running horizons. Stores players and islands,
+		which store settlements, which store buildings, which have productions and collectors.
+		Therefore world deserves its name, it contains the whole game state.
+	* scheduler - horizons.scheduler instance. Used to execute timed events. Master of time in UH.
+	* manager - horizons.manager instance. Used to execute commands (used to apply user interactions).
+		There is a singleplayer and a multiplayer version. Our mp system works by the mp-manager not
+		executing the commands directly, but sending them to all players, where they will be executed
+		at the same tick.
 	* view - horizons.view instance. Used to control the ingame camera.
-	* ingame_gui - horizons.gui.ingame_gui instance. Used to controll the ingame gui.
-	* cursor - horizons.gui.{navigation/cursor/selection/building}tool instance. Used to controll
-			   mouse events, check the classes for more info.
+	* ingame_gui - horizons.gui.ingame_gui instance. Used to control the ingame gui framework.
+		(This is different from gui, which is the main menu and general session-independent gui)
+	* cursor - horizons.gui.{navigation/cursor/selection/building}tool instance. Used to handle
+			   mouse events.
 	* selected_instances - Set that holds the currently selected instances (building, units).
-	* world - horizons.world instance of the currently running horizons. Stores islands, players,
-	          for later access.
 
 	TUTORIAL:
 	For further digging you should now be checking out the load() function.
@@ -72,14 +88,12 @@ class Session(LivingObject):
 	view = livingProperty()
 	ingame_gui = livingProperty()
 	keylistener = livingProperty()
-	world = livingProperty()
 	scenario_eventhandler = livingProperty()
 
 	log = logging.getLogger('session')
 
 	def __init__(self, gui, db, rng_seed=None):
 		super(Session, self).__init__()
-		assert isinstance(gui, Gui)
 		assert isinstance(db, horizons.util.uhdbaccessor.UhDbAccessor)
 		self.log.debug("Initing session")
 		self.gui = gui # main gui, not ingame gui
@@ -88,13 +102,12 @@ class Session(LivingObject):
 		self.savecounter = 0
 		self.is_alive = True
 
-		# misc
-		WorldObject.reset()
-		NamedComponent.reset()
-		AIPlayer.clear_caches()
+		self._clear_caches()
+		self.message_bus = MessageBus()
 
 		#game
 		self.random = self.create_rng(rng_seed)
+		assert isinstance(self.random, Random)
 		self.timer = self.create_timer()
 		Scheduler.create_instance(self.timer)
 		self.manager = self.create_manager()
@@ -111,12 +124,29 @@ class Session(LivingObject):
 		self.display_speed()
 		LastActivePlayerSettlementManager.create_instance(self)
 
+
+		self.status_icon_manager = StatusIconManager(self)
+
 		self.selected_instances = set()
-		self.selection_groups = [set()] * 10 # List of sets that holds the player assigned unit groups.
+		self.selection_groups = [set() for _ in range(10)]  # List of sets that holds the player assigned unit groups.
+
+		self._old_autosave_interval = None
 
 	def start(self):
 		"""Actually starts the game."""
 		self.timer.activate()
+		self.reset_autosave()
+
+	def reset_autosave(self):
+		"""(Re-)Set up autosave. Called if autosave interval has been changed."""
+		# get_uh_setting returns floats like 4.0 and 42.0 since slider stepping is 1.0.
+		interval = int(horizons.main.fife.get_uh_setting("AutosaveInterval"))
+		if interval != self._old_autosave_interval:
+			self._old_autosave_interval = interval
+			ExtScheduler().rem_call(self, self.autosave)
+			if interval != 0: #autosave
+				self.log.debug("Initing autosave every %s minutes", interval)
+				ExtScheduler().add_new_object(self.autosave, self, interval * 60, -1)
 
 	def create_manager(self):
 		"""Returns instance of command manager (currently MPManager or SPManager)"""
@@ -129,6 +159,11 @@ class Session(LivingObject):
 	def create_timer(self):
 		"""Returns a Timer instance."""
 		raise NotImplementedError
+
+	def _clear_caches(self):
+		WorldObject.reset()
+		NamedComponent.reset()
+		AIPlayer.clear_caches()
 
 	def end(self):
 		self.log.debug("Ending session")
@@ -150,19 +185,31 @@ class Session(LivingObject):
 			horizons.main.fife.sound.emitter['speech'].stop()
 		if hasattr(self, "cursor"): # the line below would crash uglily on ^C
 			self.cursor.remove()
+
+		if hasattr(self, 'cursor') and self.cursor is not None:
+			self.cursor.end()
+		# these will call end() if the attribute still exists by the LivingObject magic
+		self.ingame_gui = None # keep this before world
 		self.cursor = None
+		self.world.end() # must be called before the world ref is gone
 		self.world = None
 		self.keylistener = None
-		self.ingame_gui = None
 		self.view = None
 		self.manager = None
 		self.timer = None
 		self.scenario_eventhandler = None
-		Scheduler.destroy_instance()
 
+		Scheduler().end()
+		Scheduler.destroy_instance()
 
 		self.selected_instances = None
 		self.selection_groups = None
+
+		self.status_icon_manager = None
+		self.message_bus = None
+
+		horizons.main._modules.session = None
+		self._clear_caches()
 
 	def toggle_cursor(self, which, *args, **kwargs):
 		"""Alternate between the cursor which and default.
@@ -201,11 +248,18 @@ class Session(LivingObject):
 	def save(self, savegame=None):
 		raise NotImplementedError
 
-	def load(self, savegame, players, trader_enabled, pirate_enabled, natural_resource_multiplier, is_scenario=False, campaign=None):
-		"""Loads a map.
+	def load(self, savegame, players, trader_enabled, pirate_enabled,
+	         natural_resource_multiplier, is_scenario=False, campaign=None,
+	         force_player_id=None, disasters_enabled=True):
+		"""Loads a map. Key method for starting a game.
 		@param savegame: path to the savegame database.
 		@param players: iterable of dictionaries containing id, name, color, local, ai, and difficulty
 		@param is_scenario: Bool whether the loaded map is a scenario or not
+		@param force_player_id: the worldid of the selected human player or default if None (debug option)
+		"""
+		"""
+		TUTORIAL: Here you see how the vital game elements (and some random things that are also required)
+		are initialised
 		"""
 		if is_scenario:
 			# savegame is a yaml file, that contains reference to actual map file
@@ -238,13 +292,14 @@ class Session(LivingObject):
 			self.random.setstate( rng_state_tuple )
 
 		self.world = World(self) # Load horizons.world module (check horizons/world/__init__.py)
-		self.world._init(savegame_db)
+		self.world._init(savegame_db, force_player_id, disasters_enabled=disasters_enabled)
 		self.view.load(savegame_db) # load view
 		if not self.is_game_loaded():
 			# NOTE: this must be sorted before iteration, cause there is no defined order for
 			#       iterating a dict, and it must happen in the same order for mp games.
 			for i in sorted(players, lambda p1, p2: cmp(p1['id'], p2['id'])):
 				self.world.setup_player(i['id'], i['name'], i['color'], i['local'], i['ai'], i['difficulty'])
+			self.world.set_forced_player(force_player_id)
 			center = self.world.init_new_world(trader_enabled, pirate_enabled, natural_resource_multiplier)
 			self.view.center(center[0], center[1])
 		else:
@@ -257,7 +312,7 @@ class Session(LivingObject):
 		for instance_id in savegame_db("SELECT id FROM selected WHERE `group` IS NULL"): # Set old selected instance
 			obj = WorldObject.get_object_by_id(instance_id[0])
 			self.selected_instances.add(obj)
-			obj.select()
+			obj.get_component(SelectableComponent).select()
 		for group in xrange(len(self.selection_groups)): # load user defined unit groups
 			for instance_id in savegame_db("SELECT id FROM selected WHERE `group` = ?", group):
 				self.selection_groups[group].add(WorldObject.get_object_by_id(instance_id[0]))
@@ -275,13 +330,42 @@ class Session(LivingObject):
 		assert hasattr(self.world, "player"), 'Error: there is no human player'
 		"""
 		TUTORIAL:
+		That's it. After that, we call start() to activate the timer, and we're on live.
 		From here on you should digg into the classes that are loaded above, especially the world class.
 		(horizons/world/__init__.py). It's where the magic happens and all buildings and units are loaded.
 		"""
 
 	def speed_set(self, ticks, suggestion=False):
 		"""Set game speed to ticks ticks per second"""
-		raise NotImplementedError
+		old = self.timer.ticks_per_second
+		self.timer.ticks_per_second = ticks
+		self.view.map.setTimeMultiplier(float(ticks) / float(GAME_SPEED.TICKS_PER_SECOND))
+		if old == 0 and self.timer.tick_next_time is None: #back from paused state
+			if self.paused_time_missing is None:
+				# happens if e.g. a dialog pauses the game during startup on hotkeypress
+				self.timer.tick_next_time = time.time()
+			else:
+				self.timer.tick_next_time = time.time() + (self.paused_time_missing / ticks)
+		elif ticks == 0 or self.timer.tick_next_time is None:
+			# go into paused state or very early speed change (before any tick)
+			if self.timer.tick_next_time is not None:
+				self.paused_time_missing = (self.timer.tick_next_time - time.time()) * old
+			else:
+				self.paused_time_missing =  None
+			self.timer.tick_next_time = None
+		else:
+			"""
+			Under odd circumstances (anti-freeze protection just activated, game speed
+			decremented multiple times within this frame) this can delay the next tick
+			by minutes. Since the positive effects of the code aren't really observeable,
+			this code is commented out and possibly will be removed.
+
+			# correct the time until the next tick starts
+			time_to_next_tick = self.timer.tick_next_time - time.time()
+			if time_to_next_tick > 0: # only do this if we aren't late
+				self.timer.tick_next_time += (time_to_next_tick * old / ticks)
+			"""
+		self.display_speed()
 
 	def display_speed(self):
 		text = u''
@@ -387,3 +471,63 @@ class Session(LivingObject):
 		if not os.path.exists(maps_folder):
 			os.makedirs(maps_folder)
 		self.world.save_map(maps_folder, prefix)
+
+	def _do_save(self, savegame):
+		"""Actual save code.
+		@param savegame: absolute path"""
+		assert os.path.isabs(savegame)
+		self.log.debug("Session: Saving to %s", savegame)
+		try:
+			if os.path.exists(savegame):
+				os.unlink(savegame)
+			self.savecounter += 1
+
+			db = DbReader(savegame)
+		except IOError as e: # usually invalid filename
+			headline = _("Failed to create savegame file")
+			descr = _("There has been an error while creating your savegame file.")
+			advice = _("This usually means that the savegame name contains unsupported special characters.")
+			self.gui.show_error_popup(headline, descr, advice, unicode(e))
+			return self.save() # retry with new savegamename entered by the user
+			# this must not happen with quicksave/autosave
+		except ZeroDivisionError as err:
+			# TODO:
+			# this should say WindowsError, but that somehow now leads to a NameError
+			if err.winerror == 5:
+				self.gui.show_error_popup(_("Access is denied"), \
+				                          _("The savegame file is probably read-only."))
+				return self.save()
+			elif err.winerror == 32:
+				self.gui.show_error_popup(_("File used by another process"), \
+				                          _("The savegame file is currently used by another program."))
+				return self.save()
+			raise
+
+		try:
+			read_savegame_template(db)
+
+			db("BEGIN")
+			self.world.save(db)
+			#self.manager.save(db)
+			self.view.save(db)
+			self.ingame_gui.save(db)
+			self.scenario_eventhandler.save(db)
+
+			for instance in self.selected_instances:
+				db("INSERT INTO selected(`group`, id) VALUES(NULL, ?)", instance.worldid)
+			for group in xrange(len(self.selection_groups)):
+				for instance in self.selection_groups[group]:
+					db("INSERT INTO selected(`group`, id) VALUES(?, ?)", group, instance.worldid)
+
+			rng_state = json.dumps( self.random.getstate() )
+			SavegameManager.write_metadata(db, self.savecounter, rng_state)
+			# make sure everything get's written now
+			db("COMMIT")
+			db.close()
+			return True
+		except:
+			print "Save Exception"
+			traceback.print_exc()
+			db.close() # close db before delete
+			os.unlink(savegame) # remove invalid savegamefile
+			return False

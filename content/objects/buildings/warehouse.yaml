@@ -13,6 +13,10 @@ tooltip_text: null
 settler_level: 0
 buildingcosts: {1: 1000, 4: 12}
 components:
+- SelectableComponent:
+    type: building
+    tabs: [WarehouseOverviewTab, InventoryTab, BuySellTab, AccountTab]
+    enemy_tabs: [EnemyWarehouseOverviewTab,]
 - HealthComponent: {maxhealth: 1000}
 # NOTE: productions in combinations with SettlementStorage are allowed here since there is only this one warehouse per settlement
 - ProducerComponent:
@@ -26,5 +30,8 @@ components:
         SettlementStorage: {}
 - AmbientSoundComponent:
     soundfiles: [content/audio/sounds/warehouse.ogg]
+- CollectingComponent:
+    collectors:
+      1000008: 3
 actionsets:
   as_warehouse0: {preview: as_preview_warehouse0, level: 0}

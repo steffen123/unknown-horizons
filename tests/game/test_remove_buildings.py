@@ -37,7 +37,7 @@ from tests.game import settle, game_test, RANDOM_SEED
 def test_removal():
 	rng = random.Random(RANDOM_SEED)
 	for i in range(10):
-		yield remove, rng.randint(0, 200), rng.randint(0, 200), rng.randint(0, 8)
+		yield remove, rng.randint(1, 200), rng.randint(1, 200), rng.randint(0, 8)
 
 
 @game_test
@@ -95,11 +95,10 @@ def remove(s, p, before_ticks, after_ticks, tear_index):
 		path = RoadPathFinder()(island.path_nodes.nodes, start.to_tuple(), dest.to_tuple())
 		assert path
 		for (x, y) in path:
-			a = Build(BUILDINGS.TRAIL_CLASS, x, y, island, settlement=settlement)(p)
+			Build(BUILDINGS.TRAIL_CLASS, x, y, island, settlement=settlement)(p)
 
 	s.run(seconds=before_ticks)
 	# Tear down a random building that is not a trail or tree.
 	target = [b for b in settlement.buildings if b.id not in (BUILDINGS.TRAIL_CLASS, BUILDINGS.TREE_CLASS)][tear_index]
 	Tear(target)(p)
 	s.run(seconds=after_ticks)
-

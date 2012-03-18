@@ -41,7 +41,7 @@ from settlementfounder import SettlementFounder
 
 # all subclasses of AbstractBuilding have to be imported here to register the available buildings
 from building import AbstractBuilding
-from building.farm import AbstractFarm
+from building.farm import AbstractFarm, FarmEvaluator
 from building.field import AbstractField
 from building.weaver import AbstractWeaver
 from building.distillery import AbstractDistillery
@@ -49,6 +49,7 @@ from building.villagebuilding import AbstractVillageBuilding
 from building.claydeposit import AbstractClayDeposit
 from building.claypit import AbstractClayPit
 from building.brickyard import AbstractBrickyard
+from building.firestation import AbstractFireStation
 from building.fishdeposit import AbstractFishDeposit
 from building.fisher import AbstractFisher
 from building.tree import AbstractTree
@@ -71,6 +72,7 @@ from horizons.util import Callback, WorldObject
 from horizons.ext.enum import Enum
 from horizons.ai.generic import GenericAI
 from horizons.util.python import decorators
+from horizons.world.component.selectablecomponent import SelectableComponent
 
 class AIPlayer(GenericAI):
 	"""This is the AI that builds settlements."""
@@ -108,12 +110,13 @@ class AIPlayer(GenericAI):
 	def refresh_ships(self):
 		""" called when a new ship is added to the fleet """
 		for ship in self.world.ships:
-			if ship.owner == self and ship.is_selectable and ship not in self.ships:
+			if ship.owner == self and ship.has_component(SelectableComponent) and ship not in self.ships:
 				self.log.info('%s Added %s to the fleet', self, ship)
 				self.ships[ship] = self.shipStates.idle
 		self.need_more_ships = False
 
 	def __init(self):
+		self._enabled = True # whether this player is enabled (currently disabled at the end of the game)
 		self.world = self.session.world
 		self.islands = {}
 		self.settlement_managers = []
@@ -133,6 +136,8 @@ class AIPlayer(GenericAI):
 		mission.start()
 
 	def report_success(self, mission, msg):
+		if not self._enabled:
+			return
 		self.missions.remove(mission)
 		if mission.ship and mission.ship in self.ships:
 			self.ships[mission.ship] = self.shipStates.idle
@@ -147,6 +152,8 @@ class AIPlayer(GenericAI):
 			self.settlement_founder.tick()
 
 	def report_failure(self, mission, msg):
+		if not self._enabled:
+			return
 		self.missions.remove(mission)
 		if mission.ship and mission.ship in self.ships:
 			self.ships[mission.ship] = self.shipStates.idle
@@ -293,9 +300,13 @@ class AIPlayer(GenericAI):
 			self._settlement_manager_by_settlement_id[building.settlement.worldid].add_building(building)
 
 	def remove_building(self, building):
+		if not self._enabled:
+			return
 		self._settlement_manager_by_settlement_id[building.settlement.worldid].remove_building(building)
 
 	def remove_unit(self, unit):
+		if not self._enabled:
+			return
 		if unit in self.ships:
 			del self.ships[unit]
 
@@ -367,8 +378,26 @@ class AIPlayer(GenericAI):
 	@classmethod
 	def clear_caches(cls):
 		Builder.cache.clear()
+		FarmEvaluator.clear_cache()
 
 	def __str__(self):
 		return 'AI(%s/%s)' % (self.name if hasattr(self, 'name') else 'unknown', self.worldid if hasattr(self, 'worldid') else 'none')
+
+	def end(self):
+		self._enabled = False
+		self.personality_manager = None
+		self.world = None
+		self.islands = None
+		self.settlement_managers = None
+		self._settlement_manager_by_settlement_id = None
+		self.missions = None
+		self.fishers = None
+		self.settlement_founder = None
+		self.unit_builder = None
+		self.settlement_expansions = None
+		self.goals = None
+		self.special_domestic_trade_manager = None
+		self.international_trade_manager = None
+		super(AIPlayer, self).end()
 
 decorators.bind_all(AIPlayer)

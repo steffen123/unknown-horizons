@@ -24,6 +24,8 @@ import shelve
 import yaml
 import threading
 
+from horizons.constants import RES, UNITS, BUILDINGS, PATHS
+
 try:
 	from yaml import CSafeLoader as SafeLoader
 except ImportError:
@@ -34,7 +36,38 @@ def construct_yaml_str(self, node):
 	return self.construct_scalar(node)
 SafeLoader.add_constructor(u'tag:yaml.org,2002:python/unicode', construct_yaml_str)
 
-from horizons.constants import PATHS
+
+def parse_token(token, token_klass):
+	"""Helper function that tries to parse a constant name.
+	Does not do error detection, but passes unparseable stuff through.
+	Allowed values: integer or token_klass.LIKE_IN_CONSTANTS
+	@param token_klass: "RES", "UNITS" or "BUILDINGS"
+	"""
+	if isinstance(token, (str, unicode)):
+		if token.startswith(token_klass):
+			try:
+				return getattr( globals()[token_klass], token.split(".", 2)[1])
+			except AttributeError as e: # token not defined here
+				err =  "This means that you either have to add an entry in horizons/constants.py in the class %s for %s,\nor %s is actually a typo." % (token_klass, token, token)
+				raise Exception( str(e) + "\n\n" + err +"\n" )
+
+		else:
+			return token
+	else:
+		return token # probably numeric already
+
+def convert_game_data(data):
+	"""Translates convenience symbols into actual game data usable by machines"""
+	if isinstance(data, dict):
+		return dict( [ convert_game_data(i) for i in data.iteritems() ] )
+	elif isinstance(data, (tuple, list)):
+		return type(data)( ( convert_game_data(i) for i in data) )
+	else: # leaf
+		data = parse_token(data, "RES")
+		data = parse_token(data, "UNITS")
+		data = parse_token(data, "BUILDINGS")
+		return data
+
 
 class YamlCache(object):
 	"""Loads and caches YAML files in a shelve.
@@ -48,12 +81,12 @@ class YamlCache(object):
 	lock = threading.Lock()
 
 	@classmethod
-	def get_file(cls, filename):
-		data = cls.get_yaml_file(filename)
+	def get_file(cls, filename, game_data=False):
+		data = cls.get_yaml_file(filename, game_data=game_data)
 		return data
 
 	@classmethod
-	def get_yaml_file(cls, filename):
+	def get_yaml_file(cls, filename, game_data=False):
 		# calc the hash
 		f = open(filename, 'r')
 		h = hash(f.read())
@@ -65,11 +98,41 @@ class YamlCache(object):
 		if isinstance(filename, unicode):
 			filename = filename.encode('utf8') # shelve needs str keys
 
-		if (filename in cls.cache and \
-				cls.cache[filename][0] != h) or \
-			 (not filename in cls.cache):
+		def handle_get_yaml_file_error(e, release):
+				# when something unexpected happens, shelve does not guarantee anything.
+				# since crashing on any access is part of the specified behaviour, we need to handle it.
+				# cf. http://bugs.python.org/issue14041
+				print 'Warning: Can\'t write to shelve: ', e
+				# delete cache and try again
+				os.remove(cls.cache_filename)
+				cls.cache = None
+				if release:
+					cls.lock.release()
+				return cls.get_yaml_file(filename, game_data=game_data)
+
+		try:
+			yaml_file_in_cache = (filename in cls.cache and cls.cache[filename][0] == h)
+		except Exception as e:
+			return handle_get_yaml_file_error(e, release=False)
+
+		if not yaml_file_in_cache:
+			data = yaml.load( f, Loader = SafeLoader )
+			if game_data: # need to convert some values
+				try:
+					data = convert_game_data(data)
+				except Exception as e:
+					# add info about file
+					to_add = "\nThis error happened in %s ." % filename
+					e.args = ( e.args[0] + to_add, ) + e.args[1:]
+					e.message = ( e.message + to_add )
+					raise
+
 			cls.lock.acquire()
-			cls.cache[filename] = (h, yaml.load( f, Loader = SafeLoader ) )
+			try:
+				cls.cache[filename] = (h, data)
+			except Exception as e:
+				return handle_get_yaml_file_error(e, release=True)
+
 			if not cls.sync_scheduled:
 				cls.sync_scheduled = True
 				from horizons.extscheduler import ExtScheduler

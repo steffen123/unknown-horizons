@@ -22,18 +22,20 @@
 import json
 import sqlite3
 
+from collections import defaultdict
+
 from horizons.constants import BUILDINGS, SETTLER
 from horizons.entities import Entities
 from horizons.util.worldobject import WorldObject
 from horizons.util.shapes.rect import Rect
+from horizons.util.messaging.message import UpgradePermissionsChanged
 from horizons.util.changelistener import ChangeListener
 from horizons.world.componentholder import ComponentHolder
-from horizons.world.component.namedcomponent import SettlementNameComponent
-from horizons.world.component.storagecomponent import StorageComponent
 from horizons.world.component.tradepostcomponent import TradePostComponent
-from horizons.world.storage import PositiveSizedSlotStorage
+from horizons.world.production.producer import Producer
+from horizons.world.resourcehandler import ResourceHandler
 
-class Settlement(ComponentHolder, WorldObject, ChangeListener):
+class Settlement(ComponentHolder, WorldObject, ChangeListener, ResourceHandler):
 	"""The Settlement class describes a settlement and stores all the necessary information
 	like name, current inhabitants, lists of tiles and houses, etc belonging to the village."""
 
@@ -57,12 +59,14 @@ class Settlement(ComponentHolder, WorldObject, ChangeListener):
 		self.__init(session, owner, self.make_default_upgrade_permissions(), self.make_default_tax_settings())
 
 	def __init(self, session, owner, upgrade_permissions, tax_settings):
+		from horizons.session import Session
+		assert isinstance(session, Session)
 		self.session = session
 		self.owner = owner
 		self.buildings = []
 		self.ground_map = {} # this is the same as in island.py. it uses hard references to the tiles too
-		self.produced_res = {} # dictionary of all resources, produced at this settlement
-		self.buildings_by_id = {}
+		self.produced_res = defaultdict(lambda : 0) # dictionary of all resources, produced at this settlement
+		self.buildings_by_id = defaultdict(list)
 		self.warehouse = None # this is set later in the same tick by the warehouse itself or load() here
 		self.upgrade_permissions = upgrade_permissions
 		self.tax_settings = tax_settings
@@ -88,10 +92,8 @@ class Settlement(ComponentHolder, WorldObject, ChangeListener):
 	def set_upgrade_permissions(self, level, allowed):
 		if self.upgrade_permissions[level] != allowed:
 			self.upgrade_permissions[level] = allowed
-			for building in self.get_buildings_by_id(BUILDINGS.RESIDENTIAL_CLASS):
-				if building.level == level:
-					building.on_change_upgrade_permissions()
 
+			self.session.message_bus.broadcast(UpgradePermissionsChanged(self))
 
 	@property
 	def inhabitants(self):
@@ -218,8 +220,8 @@ class Settlement(ComponentHolder, WorldObject, ChangeListener):
 			self.buildings_by_id[building.id].append(building)
 		else:
 			self.buildings_by_id[building.id] = [building]
-		if hasattr(building, "add_building_production_finished_listener"):
-			building.add_building_production_finished_listener(self.settlement_building_production_finished)
+		if building.has_component(Producer):
+			building.get_component(Producer).add_production_finished_listener(self.settlement_building_production_finished)
 		if hasattr(self.owner, 'add_building'):
 			# notify interested players of added building
 			self.owner.add_building(building)
@@ -228,28 +230,26 @@ class Settlement(ComponentHolder, WorldObject, ChangeListener):
 		"""Properly removes a building from the settlement"""
 		self.buildings.remove(building)
 		self.buildings_by_id[building.id].remove(building)
-		if hasattr(building, "remove_building_production_finished_listener"):
-			building.remove_building_production_finished_listener(self.settlement_building_production_finished)
+		if building.has_component(Producer):
+			building.get_component(Producer).remove_production_finished_listener(self.settlement_building_production_finished)
 		if hasattr(self.owner, 'remove_building'):
 			# notify interested players of removed building
 			self.owner.remove_building(building)
 
-	def get_buildings_by_id(self, id):
-		"""Returns all buildings on this island that have the given id"""
-		if id in self.buildings_by_id.keys():
-			return self.buildings_by_id[id]
-		else:
-			return []
-
 	def count_buildings(self, id):
 		"""Returns the number of buildings in the settlement that are of the given type."""
-		return len(self.buildings_by_id[id]) if id in self.buildings_by_id else 0
+		return len(self.buildings_by_id.get(id, []))
 
 	def settlement_building_production_finished(self, building, produced_res):
 		"""Callback function for registering the production of resources."""
 		for res, amount in produced_res.iteritems():
-			if res in self.produced_res:
-				self.produced_res[res] += amount
-			else:
-				self.produced_res[res] = amount
+			self.produced_res[res] += amount
 
+	def end(self):
+		self.session = None
+		self.owner = None
+		self.buildings = None
+		self.ground_map = None
+		self.produced_res = None
+		self.buildings_by_id = None
+		self.warehouse = None

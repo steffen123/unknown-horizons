@@ -21,18 +21,21 @@
 
 from fife import fife
 
-STYLES= {
+STYLES = {
 'default': {
 		'default' : {
 			'border_size': 0,
 			'margins': (0, 0),
-			'base_color' : fife.Color(40, 40, 40, 0),
-			'foreground_color' : fife.Color(255, 255, 255),
-			'background_color' : fife.Color(40, 40, 40, 255),
-			'selection_color' : fife.Color(80, 80, 80, 255),
+			'base_color' : fife.Color(40, 40, 40,   0),
+			'foreground_color' : fife.Color( 80, 80, 40,   0),
+			'background_color' : fife.Color(255,255,255, 128),
+			'selection_color' : fife.Color(80,80,40, 192),
 			'font' : '14_black',
 		},
 		'Button' : {
+			'background_color' : fife.Color(255,255,255,32),
+			'foreground_color' : fife.Color(80,80,40, 192),
+			'base_color' : fife.Color(80,80,40, 64),
 			'border_size': 1,
 			'margins' : (10, 5),
 		},
@@ -41,18 +44,21 @@ STYLES= {
 		},
 		('CheckBox','DropDown') : {
 			'selection_color' : fife.Color(255,255,255,200),
-			'background_color' : fife.Color(255,255,255,128),
-			'base_color' : fife.Color(0,0,0,0),
+			'background_color' : fife.Color(255,255,255,64),
 			'foreground_color' : fife.Color(80,80,40),
+			'base_color' : fife.Color(0,0,0,0),
 			'font' : '14_black',
 			'border_size': 0,
 		},
 		('Slider','StepSlider') : {
 			'base_color' : fife.Color(80,80,40,128),
 		},
-		'TextBox' : {
+		'TextField' : {
+			'selection_color' : fife.Color(255,255,255),
+			'background_color' : fife.Color(255,255,255,64),
+			'base_color' : fife.Color(0,0,0,0),
+			'foreground_color' : fife.Color(80,80,40),
 			'font' : '14_black',
-			'opaque': 0
 		},
 		'ListBox' : {
 			'background_color' : fife.Color(0,0,0,0),
@@ -69,9 +75,8 @@ STYLES= {
 		},
 		'RadioButton' : {
 			'border_size': 0,
-			'background_color' : fife.Color(0, 0, 0, 0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'border_size': 0,
 			'background_color' : fife.Color(40, 40, 40, 0),
 			'font' : '14_black',
@@ -103,7 +108,7 @@ STYLES= {
 			'border_size': 0,
 			'margins' : (10, 5)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'border_size': 0,
 			'font' : 'mainmenu',
 			'background_color' : fife.Color(0, 0, 0, 102)
@@ -125,7 +130,7 @@ STYLES= {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'margins': (0,0),
 			'font' : '14_black'
 		},
@@ -149,7 +154,7 @@ STYLES= {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'alpha':0,
 			'font' : 'small_black'
 		}
@@ -170,7 +175,7 @@ STYLES= {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'margins': (0,0),
 			'font' : 'small'
 		}
@@ -192,7 +197,7 @@ STYLES= {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : '18'
 		}
 },
@@ -212,7 +217,7 @@ STYLES= {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : 'headline'
 		},
 		# NOTE: This is a hack to add padding attributs to boxes of this style
@@ -227,12 +232,12 @@ STYLES= {
 			'font' : '14_black',
 			'foreground_color' : fife.Color(80,80,40),
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : '14_black',
 		},
-		'CheckBox' : {
+		('CheckBox', 'RadioButton') : {
 			'selection_color' : fife.Color(255,255,255,200),
-			'background_color' : fife.Color(255,255,255,128),
+			'background_color' : fife.Color(255,255,255,64),
 			'base_color' : fife.Color(0,0,0,0),
 			'foreground_color' : fife.Color(80,80,40),
 		},
@@ -245,10 +250,6 @@ STYLES= {
 		},
 		('Slider','StepSlider') : {
 			'base_color' : fife.Color(80,80,40,128),
-		},
-		'TextBox' : {
-			'font' : '14_black',
-			'opaque': 0
 		},
 		'ListBox' : {
 			'background_color' : fife.Color(0,0,0,0),
@@ -284,12 +285,8 @@ STYLES= {
 	    'default' : {
 			'font' : '14_black',
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : '14_black',
-		},
-		'TextBox' : {
-			'font' : '14_black',
-			'opaque': 0
 		},
 		'ListBox' : {
 			'font' : '14_black',
@@ -322,7 +319,7 @@ STYLES= {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : 'tooltip'
 		}
 	},

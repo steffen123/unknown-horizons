@@ -35,7 +35,7 @@ class InventoryTab(TabInterface):
 		self.button_active_image = icon_path % 'a'
 		self.button_down_image = icon_path % 'd'
 		self.button_hover_image = icon_path % 'h'
-		self.tooltip = _("Settlement inventory")
+		self.helptext = _("Settlement inventory")
 
 	def _lazy_loading_init(self):
 		super(InventoryTab, self)._lazy_loading_init()
@@ -48,9 +48,9 @@ class InventoryTab(TabInterface):
 
 	def show(self):
 		# run once now
-		ExtScheduler().add_new_object(self.refresh, self, run_in=0.01, loops=1)
+		ExtScheduler().add_new_object(self.refresh, self, run_in=0, loops=1)
 		# and every sec later
-		ExtScheduler().add_new_object(self.refresh, self, run_in=1, loops=1)
+		ExtScheduler().add_new_object(self.refresh, self, run_in=1, loops=-1)
 		super(InventoryTab, self).show()
 
 	def hide(self):

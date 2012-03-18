@@ -26,12 +26,34 @@ from horizons.world.component.namedcomponent import NamedComponent, SettlementNa
 from horizons.world.component.tradepostcomponent import TradePostComponent
 from horizons.world.component.ambientsoundcomponent import AmbientSoundComponent
 from horizons.world.component.healthcomponent import HealthComponent
+from horizons.world.component.selectablecomponent import SelectableComponent
+from horizons.world.component.commandablecomponent import CommandableComponent
+from horizons.world.component.collectingcompontent import CollectingComponent
 from horizons.world.production.producer import Producer, QueueProducer, UnitProducer
 
 class ComponentHolder(object):
 	"""
 	Class that manages Component plug-ins
-	It can be inherided by all objects that can hold components
+	It can be inherited by all objects that can hold components
+
+	TUTORIAL:
+	I can't explain component-oriented architecture to you here, but i can give you
+	an overview of how we use it:
+	Instead of putting all different features of entities into single classes,
+	as it's common in OOP, every feature is put into a component. This should
+	increase the encapsulation, and it's easier if an object consists of 15 independent
+	building blocks than if it were 15 classes, where many override the same function call
+	and fight about who gets called first.
+	Check class_mapping for a complete list of the different components we use.
+
+	The components are stored in a dict, the key is their name (a string).
+	This is necessary so objects can be defined as a collection of their components in
+	human readable format. This is done via yaml files in content/objects in our case.
+	You could check out e.g. content/objects/buildings/lumberjackcamp.yaml to see what
+	it looks like.
+
+	This class manages the components, it stores them and makes them accessible.
+	Check out the actual component class in horizons/world/component/__init__.py
 	"""
 
 	class_mapping = {
@@ -45,7 +67,10 @@ class ComponentHolder(object):
 	    "HealthComponent": HealthComponent,
 	    'ProducerComponent': Producer,
 	    'QueueProducerComponent': QueueProducer,
-	    'UnitProducerComponent': UnitProducer
+	    'UnitProducerComponent': UnitProducer,
+	    'SelectableComponent': SelectableComponent,
+	    'CommandableComponent': CommandableComponent,
+	    'CollectingComponent': CollectingComponent,
 	}
 
 
@@ -54,8 +79,14 @@ class ComponentHolder(object):
 		self.components = {}
 
 	def initialize(self):
-		"""Has to be called every time an componentholder is created."""
+		"""Has to be called every time an componentholder is created. This is not
+		in __init__() because we need to make sure that all other sub/parent classes
+		have been inited, for example the ConcreteObject class. This is to ensure
+		that all member variables of sub/parent classes are correctly set when we
+		init the components. If someday all code is moved to components, this will
+		not be necessary any more."""
 		for component in self.__create_components():
+
 			self.add_component(component)
 
 	def __create_components(self):
@@ -99,8 +130,8 @@ class ComponentHolder(object):
 		"""
 		assert isinstance(component, Component)
 		component.instance = self
-		component.initialize()
 		self.components[component.NAME] = component
+		component.initialize()
 
 	def remove_component(self, component_class):
 		"""
@@ -117,7 +148,6 @@ class ComponentHolder(object):
 		return component_class.NAME in self.components
 
 	def get_component(self, component):
-		#assert self.__initialized, "You forgot to initialize this componentholder:" + str(self)
 		if self.has_component(component):
 			return self.components[component.NAME]
 		else:

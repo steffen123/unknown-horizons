@@ -23,6 +23,7 @@ import glob
 import os
 import os.path
 import random
+import traceback
 import time
 import tempfile
 import logging
@@ -35,11 +36,13 @@ from horizons.savegamemanager import SavegameManager
 from horizons.gui.keylisteners import MainListener
 from horizons.gui.keylisteners.ingamekeylistener import KeyConfig
 from horizons.util import Callback
+from horizons.extscheduler import ExtScheduler
 from horizons.world.component.ambientsoundcomponent import AmbientSoundComponent
 from horizons.util.gui import LazyWidgetsDict
 from horizons.i18n.utils import N_
 
 from horizons.gui.modules import SingleplayerMenu, MultiplayerMenu
+from horizons.command.game import PauseCommand, UnPauseCommand
 
 class Gui(SingleplayerMenu, MultiplayerMenu):
 	"""This class handles all the out of game menu, like the main and pause menu, etc.
@@ -53,6 +56,10 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 	  'ingamemenu': 'headline',
 	  'help': 'book',
 	  'singleplayermenu': 'book',
+	  'sp_random': 'book',
+	  'sp_scenario': 'book',
+	  'sp_campaign': 'book',
+	  'sp_free_maps': 'book',
 	  'multiplayermenu' : 'book',
 	  'multiplayer_creategame' : 'book',
 	  'multiplayer_gamelobby' : 'book',
@@ -60,6 +67,7 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 	  'aidataselection' : 'book',
 	  'select_savegame': 'book',
 	  'ingame_pause': 'book',
+	  'game_settings' : 'book',
 #	  'credits': 'book',
 	  }
 
@@ -105,7 +113,7 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			self.__pause_displayed = False
 			self.hide()
 			self.current = None
-			self.session.speed_unpause(True)
+			UnPauseCommand(suggestion=True).execute(self.session)
 			self.on_escape = self.toggle_pause
 
 		else:
@@ -157,7 +165,7 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			self.current.additional_widget.show()
 			self.current.show()
 
-			self.session.speed_pause(True)
+			PauseCommand(suggestion=True).execute(self.session)
 			self.on_escape = self.toggle_pause
 
 # what happens on button clicks
@@ -171,6 +179,7 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			self.show_popup(_('Error'), _('Failed to save.'))
 
 	def show_settings(self):
+		self.on_escape = lambda : horizons.main.fife._setting.OptionsDlg.hide()
 		horizons.main.fife.show_settings()
 
 	_help_is_displayed = False
@@ -182,7 +191,7 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			self._help_is_displayed = True
 			# make game pause if there is a game and we're not in the main menu
 			if self.session is not None and self.current != self.widgets['ingamemenu']:
-				self.session.speed_pause()
+				PauseCommand().execute(self.session)
 			if self.session is not None:
 				self.session.ingame_gui.on_escape() # close dialogs that might be open
 			self.show_dialog(help_dlg, {'okButton' : True}, onPressEscape = True)
@@ -190,7 +199,7 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 		else:
 			self._help_is_displayed = False
 			if self.session is not None and self.current != self.widgets['ingamemenu']:
-				self.session.speed_unpause()
+				UnPauseCommand().execute(self.session)
 			help_dlg.hide()
 
 	def show_quit(self):
@@ -244,24 +253,51 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			self.current_dialog.hide()
 		self.show_dialog(self.widgets['credits'+str(number)], {'okButton' : True}, onPressEscape = True)
 
-	def show_select_savegame(self, mode):
+	def show_select_savegame(self, mode, sanity_checker=None, sanity_criteria=None):
 		"""Shows menu to select a savegame.
-		@param mode: 'save' or 'load'
+		@param mode: 'save', 'load' or 'mp_load'
+		@param sanity_checker: only allow manually entered names that pass this test
+		@param sanity_criteria: explain which names are allowed to the user
 		@return: Path to savegamefile or None"""
-		assert mode in ('save', 'load')
+		assert mode in ('save', 'load', 'mp_load', 'mp_save')
 		map_files, map_file_display = None, None
+		mp = False
+		args = mode, sanity_checker, sanity_criteria # for reshow
+		if mode.startswith('mp'):
+			mode = mode[3:]
+			mp = True
+			# below this line, mp_load == load, mp_save == save
 		if mode == 'load':
-			map_files, map_file_display = SavegameManager.get_saves()
+			if not mp:
+				map_files, map_file_display = SavegameManager.get_saves()
+			else:
+				map_files, map_file_display = SavegameManager.get_multiplayersaves()
 			if len(map_files) == 0:
 				self.show_popup(_("No saved games"), _("There are no saved games to load."))
 				return
 		else: # don't show autosave and quicksave on save
-			map_files, map_file_display = SavegameManager.get_regular_saves()
+			if not mp:
+				map_files, map_file_display = SavegameManager.get_regular_saves()
+			else:
+				map_files, map_file_display = SavegameManager.get_multiplayersaves()
 
 		# Prepare widget
 		old_current = self._switch_current_widget('select_savegame')
 		self.current.findChild(name='headline').text = _('Save game') if mode == 'save' else _('Load game')
-		self.current.findChild(name='okButton').tooltip = _('Save game') if mode == 'save' else _('Load game')
+		self.current.findChild(name='okButton').helptext = _('Save game') if mode == 'save' else _('Load game')
+
+		name_box = self.current.findChild(name="gamename_box")
+		if mp and mode == 'load': # have gamename
+			name_box.parent.showChild(name_box)
+			gamename_textfield = self.current.findChild(name="gamename")
+			def clear_gamename_textfield():
+				gamename_textfield.text = u""
+			gamename_textfield.capture(clear_gamename_textfield, 'mouseReleased', 'default')
+		else:
+			if name_box not in name_box.parent.hidden_children:
+				name_box.parent.hideChild(name_box)
+
+		self.current.show()
 
 		if not hasattr(self, 'filename_hbox'):
 			self.filename_hbox = self.current.findChild(name='enter_filename')
@@ -314,22 +350,27 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 				self.current.distributeData({'savegamelist' : -1})
 				cb()
 			self.current = old_current
-			return self.show_select_savegame(mode=mode)
+			return self.show_select_savegame(*args)
 
 		selected_savegame = None
 		if mode == 'save': # return from textfield
 			selected_savegame = self.current.collectData('savegamefile')
 			if selected_savegame == "":
-				self.show_error_popup(windowtitle = _("No filename given"), description = _("Please enter a valid filename."),)
+				self.show_error_popup(windowtitle = _("No filename given"), description = _("Please enter a valid filename."))
 				self.current = old_current
-				return self.show_select_savegame(mode=mode) # reshow dialog
+				return self.show_select_savegame(*args) # reshow dialog
 			elif selected_savegame in map_file_display: # savegamename already exists
 				#xgettext:python-format
 				message = _("A savegame with the name '{name}' already exists.").format(
 				             name=selected_savegame) + u"\n" + _('Overwrite it?')
 				if not self.show_popup(_("Confirmation for overwriting"), message, show_cancel_button = True):
 					self.current = old_current
-					return self.show_select_savegame(mode=mode) # reshow dialog
+					return self.show_select_savegame(*args) # reshow dialog
+			elif sanity_checker and sanity_criteria:
+				if not sanity_checker(selected_savegame):
+					self.show_error_popup(windowtitle = _("Invalid filename given"), description = sanity_criteria)
+					self.current = old_current
+					return self.show_select_savegame(*args) # reshow dialog
 		else: # return selected item from list
 			selected_savegame = self.current.collectData('savegamelist')
 			selected_savegame = None if selected_savegame == -1 else map_files[selected_savegame]
@@ -337,9 +378,15 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 				# ok button has been pressed, but no savegame was selected
 				self.show_popup(_("Select a savegame"), _("Please select a savegame or click on cancel."))
 				self.current = old_current
-				return self.show_select_savegame(mode=mode) # reshow dialog
+				return self.show_select_savegame(*args) # reshow dialog
+
+		if mp and mode == 'load': # also name
+			gamename_textfield = self.current.findChild(name="gamename")
+			ret = selected_savegame, self.current.collectData('gamename')
+		else:
+			ret = selected_savegame
 		self.current = old_current # reuse old widget
-		return selected_savegame
+		return ret
 
 # display
 
@@ -395,17 +442,21 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 		@return: True on ok, False on cancel (if no cancel button, always True)
 		"""
 		popup = self.build_popup(windowtitle, message, show_cancel_button, size=size)
+		# ok should be triggered on enter, therefore we need to focus the button
+		# pychan will only allow it after the widgets is shown
+		ExtScheduler().add_new_object(lambda : popup.findChild(name='okButton').requestFocus(), self, run_in=0)
 		if show_cancel_button:
 			return self.show_dialog(popup, {'okButton' : True, 'cancelButton' : False}, onPressEscape = False)
 		else:
 			return self.show_dialog(popup, {'okButton' : True}, onPressEscape = True)
 
-	def show_error_popup(self, windowtitle, description, advice=None, details=None):
+	def show_error_popup(self, windowtitle, description, advice=None, details=None, _first=True):
 		"""Displays a popup containing an error message.
 		@param windowtitle: title of popup, will be auto-prefixed with "Error: "
 		@param description: string to tell the user what happened
 		@param advice: how the user might be able to fix the problem
 		@param details: technical details, relevant for debugging but not for the user
+		@param _first: Don't touch this.
 
 		Guide for writing good error messages:
 		http://www.useit.com/alertbox/20010624.html
@@ -416,7 +467,15 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			msg += advice + u"\n"
 		if details:
 			msg += _(u"Details:") + u" " + details
-		self.show_popup( _(u"Error:") + u" " + windowtitle, msg, show_cancel_button=False)
+		try:
+			self.show_popup( _(u"Error:") + u" " + windowtitle, msg, show_cancel_button=False)
+		except:
+			if _first:
+				traceback.print_exc()
+				print 'Exception while showing error, retrying once more'
+				return self.show_error_popup(windowtitle, description, advice, details, _first=False)
+			else:
+				raise # it persists, we have to die.
 
 	def build_popup(self, windowtitle, message, show_cancel_button = False, size=0):
 		""" Creates a pychan popup widget with the specified properties.
@@ -509,7 +568,9 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			savegame_info = SavegameManager.get_metadata(map_file)
 
 			# screenshot (len can be 0 if save failed in a weird way)
-			if savegame_info['screenshot'] is not None and len(savegame_info['screenshot']) > 0:
+			if 'screenshot' in savegame_info and \
+			   savegame_info['screenshot'] is not None and \
+			   len(savegame_info['screenshot']) > 0:
 				# try to find a writeable location, that is accessible via relative paths
 				# (required by fife)
 				fd, filename = tempfile.mkstemp()
@@ -541,8 +602,8 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			else:
 				#xgettext:python-format
 				details_label.text += _("Saved at {time}").format(
-				                         time=time.strftime("%H:%M, %A, %B %d",
-				                         time.localtime(savegame_info['timestamp'])))
+				                         time=time.strftime("%c",
+				                         time.localtime(savegame_info['timestamp'])).decode('utf-8'))
 			details_label.text += u'\n'
 			counter = savegame_info['savecounter']
 			# N_ takes care of plural forms for different languages
@@ -636,4 +697,4 @@ def build_help_strings(widgets):
 		lbl[0].text = HELPSTRING_LAYOUT.format(text=_(lbl[0].text), key=keyname.upper())
 
 	author_label = widgets.findChild(name='fife_and_uh_team')
-	author_label.tooltip = u"www.unknown-[br]horizons.org[br]www.fifengine.net"
+	author_label.helptext = u"www.unknown-[br]horizons.org[br]www.fifengine.net"

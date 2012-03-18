@@ -22,7 +22,8 @@
 
 from itertools import product
 
-from horizons.command.building import Build
+from horizons.command.building import Build, Tear
+from horizons.util.worldobject import WorldObject, WorldObjectNotFound
 from horizons.command.unit import CreateUnit
 from horizons.constants import BUILDINGS, UNITS, RES
 from horizons.world.component.storagecomponent import StorageComponent
@@ -42,7 +43,7 @@ def test_lumberjack(s, p):
 	assert jack
 
 	assert jack.get_component(StorageComponent).inventory[RES.BOARDS_ID] == 0
-	assert jack.get_component(StorageComponent).inventory[RES.WOOD_ID] == 0
+	assert jack.get_component(StorageComponent).inventory[RES.TREES_ID] == 0
 
 	for (x_off, y_off) in product([-2, 2], repeat=2):
 		x = 30 + x_off
@@ -151,3 +152,45 @@ def test_tool_production_chain(s, p):
 	assert toolmaker.get_component(StorageComponent).inventory[RES.TOOLS_ID] == 0
 	s.run(seconds=120)
 	assert toolmaker.get_component(StorageComponent).inventory[RES.TOOLS_ID]
+
+@game_test
+def test_build_tear(s, p):
+	"""
+	Build stuff and tear it later
+	"""
+	settlement, island = settle(s)
+	tree = Build(BUILDINGS.TREE_CLASS, 30, 35, island, settlement=settlement)(p)
+
+	s.run(seconds=1)
+
+	wid = tree.worldid
+	Tear(tree)(p)
+
+	try:
+		WorldObject.get_object_by_id(wid)
+	except WorldObjectNotFound:
+		pass # should be gone
+	else:
+		assert False
+
+
+@game_test(timeout=60)
+def test_tree_production(s, p):
+	"""Check whether trees produce wood"""
+	settlement, island = settle(s)
+	tree = Build(BUILDINGS.TREE_CLASS, 30, 35, island, settlement=settlement)(p)
+
+	n = 20
+
+	inv = tree.get_component(StorageComponent).inventory
+	for i in xrange(n):  # we want n units
+
+		while not inv[RES.TREES_ID]:
+			s.run(seconds=5)
+
+		# take one away to free storage space
+		#from tests import set_trace ; set_trace()
+		inv.alter(RES.TREES_ID, -1)
+
+	# here, n tons of wood have been produced
+

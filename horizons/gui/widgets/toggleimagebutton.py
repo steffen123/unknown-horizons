@@ -20,10 +20,10 @@
 # ###################################################
 
 from fife.extensions import pychan
-import tooltip
 from fife.extensions.pychan.widgets.common import Attr, UnicodeAttr
 
-class ToggleImageButton(tooltip.TooltipButton):
+
+class ToggleImageButton(pychan.widgets.ImageButton):
 	"""The ToggleImageButton is an extended ImageButton (Think decorator pattern).
 	It adds one extra attribute inactive_image. You can then set the button active
 	or inactive (only in code for now). Setting the ToggleImageButton to inactive
@@ -33,7 +33,7 @@ class ToggleImageButton(tooltip.TooltipButton):
 	@param inactive_image The image that is to be used as inactive image.
 	"""
 
-	ATTRIBUTES = pychan.widgets.ImageButton.ATTRIBUTES + [Attr('inactive_image')] + [UnicodeAttr('tooltip')]
+	ATTRIBUTES = pychan.widgets.ImageButton.ATTRIBUTES + [Attr('inactive_image')]
 
 	# These two constants are used to describe the state of the widget.
 	ACTIVE = 0

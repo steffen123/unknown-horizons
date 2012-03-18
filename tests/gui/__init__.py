@@ -49,52 +49,94 @@ the test will be further exhausted:
 
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
 from functools import wraps
 
+from nose.plugins import Plugin
+
 from tests import RANDOM_SEED
 from tests.gui.helper import GuiHelper
-
-# check if SIGALRM is supported, this is not the case on Windows
-# we might provide an alternative later, but for now, this will do
-try:
-	from signal import SIGALRM
-	TEST_TIMELIMIT = True
-except ImportError:
-	TEST_TIMELIMIT = False
-
+from tests.utils import Timer
 
 # path where test savegames are stored (tests/gui/ingame/fixtures/)
 TEST_FIXTURES_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'ingame', 'fixtures')
-
 
 # Used by the test to signal that's it's finished.
 # Needed to distinguish between the original test and other generators used
 # for dialogs.
 TestFinished = 'finished'
 
+class TestFailed(Exception): pass
+
 
 TEST_USER_DIR = None
 
 def setup_package():
-	"""
-	Create a temporary dictionary to use as user dictionary (settings, savegames etc.)
-	while the tests are running.
-	"""
+	"""Create a temporary directory to use as user directory (settings, savegames etc.)
+	while the tests are running."""
 	global TEST_USER_DIR
 	TEST_USER_DIR = tempfile.mkdtemp()
 
 
 def teardown_package():
-	"""
-	Delete the user dictionary.
-	"""
+	"""Delete the user directory."""
 	global TEST_USER_DIR
 	shutil.rmtree(TEST_USER_DIR)
 	TEST_USER_DIR = None
+
+
+def recreate_userdir():
+	"""Cleanup user directory by deleting the old and using a new path.
+
+	Some tests may modify the user directory, e.g. by saving games, we need to
+	revert these changes."""
+	global TEST_USER_DIR
+	shutil.rmtree(TEST_USER_DIR)
+	TEST_USER_DIR = tempfile.mkdtemp()
+
+
+class GuiTestPlugin(Plugin):
+	"""This plugin is used to improve the test failure display for gui tests.
+
+	Because nose runs in a different process than the real test, we cannot easily
+	show the traceback as if the exception occured here. The real traceback will
+	be used as message in an `TestFailed` exception, which we capture here and
+	remove the traceback (from the TestFailed raise) entirely, leaving us just
+	with the exception.
+
+	This:
+
+		------------------------
+		Traceback (most recent call last):
+			File "/path/to/nose/case.py", line 197, in runTest
+				self.test(*self.arg)
+			File "/path/to/tests/gui/__init__.py", line 273, in wrapped
+				raise TestFailed("\n\n" + error)
+		TestFailed:
+
+		[Real traceback]
+
+	Becomes:
+
+		------------------------
+		TestFailed:
+
+		[Real traceback]
+	"""
+	name = 'guitest'
+	enabled = True
+
+	def configure(self, options, conf):
+		pass
+
+	def formatError(self, test, err):
+		exc_type, value, traceback = err
+		if exc_type == TestFailed:
+			traceback = None
+
+		return exc_type, value, traceback
 
 
 class TestRunner(object):
@@ -181,13 +223,14 @@ class TestRunner(object):
 			pass
 
 
-def gui_test(use_dev_map=False, use_fixture=None, ai_players=0, timeout=0):
+def gui_test(use_dev_map=False, use_fixture=None, ai_players=0, timeout=15 * 60, cleanup_userdir=False):
 	"""Magic nose integration.
 
 	use_dev_map		-	starts the game with --start-dev-map
 	use_fixture		-	starts the game with --load-map=fixture_name
 	ai_players		-	starts the game with --ai_players=<number>
 	timeout			-	test will be stopped after X seconds passed (0 = disabled)
+	cleanup_userdir	-	whether the userdir should be cleaned after the test
 
 	Each GUI test is run in a new process. In case of an error, stderr will be
 	printed. That way it will appear in the nose failure listing.
@@ -234,21 +277,25 @@ def gui_test(use_dev_map=False, use_fixture=None, ai_players=0, timeout=0):
 			# Start game
 			proc = subprocess.Popen(args, stdout=stdout, stderr=stderr, env=env)
 
-			if TEST_TIMELIMIT and timeout:
-				# Install timeout kill
-				def handler(signum, frame):
-					proc.kill()
-					raise Exception('Test run exceeded %ds time limit' % timeout)
-				signal.signal(signal.SIGALRM, handler)
-				signal.alarm(timeout)
+			def handler(signum, frame):
+				proc.kill()
+				raise TestFailed('\n\nTest run exceeded %ds time limit' % timeout)
+
+			timelimit = Timer(handler)
+			timelimit.start(timeout)
 
 			stdout, stderr = proc.communicate()
 			if proc.returncode != 0:
 				if nose_captured:
-					print stdout
-					print '-' * 30
-					print stderr
-				assert False, 'Test failed'
+					if stdout:
+						print stdout
+					if cleanup_userdir:
+						recreate_userdir()
+					raise TestFailed('\n\n' + stderr)
+				else:
+					if cleanup_userdir:
+						recreate_userdir()
+					raise TestFailed()
 
 		# we need to store the original function, otherwise the new process will execute
 		# this decorator, thus spawning a new process..
@@ -259,3 +306,6 @@ def gui_test(use_dev_map=False, use_fixture=None, ai_players=0, timeout=0):
 	return deco
 
 gui_test.__test__ = False
+
+# FIXME GUI tests still don't work in parallel, this is needed for game/unit tests to work
+_multiprocess_can_split_ = True

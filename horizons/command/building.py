@@ -113,9 +113,11 @@ class Build(Command):
 		  action_set_id=self.action_set_id, \
 		  **self.data
 		)
-		island.add_building(building, issuer)
-
 		building.initialize(**self.data)
+		# initialize must be called immediately after the construction
+		# the building is not usable before this call
+
+		island.add_building(building, issuer)
 
 
 		if self.settlement is not None:
@@ -129,7 +131,7 @@ class Build(Command):
 			for (resource, value) in building.costs.iteritems():
 				# remove from issuer, and remove rest from secondary source (settlement or ship)
 				first_source_remnant = issuer.get_component(StorageComponent).inventory.alter(resource, -value)
-				if secondary_resource_source is not None:
+				if first_source_remnant != 0 and secondary_resource_source is not None:
 					second_source_remnant = secondary_resource_source.get_component(StorageComponent).inventory.alter(resource, first_source_remnant)
 					assert second_source_remnant == 0
 				else: # first source must have covered everything
@@ -144,7 +146,8 @@ class Build(Command):
 			ship = WorldObject.get_object_by_id(self.ship)
 			for res, amount in [(res, amount) for res, amount in ship.get_component(StorageComponent).inventory]: # copy the inventory first because otherwise we would modify it while iterating
 				amount = min(amount, building.settlement.get_component(StorageComponent).inventory.get_free_space_for(res))
-				TransferResource(amount, res, ship, building.settlement).execute(session)
+				# execute directly, we are already in a command
+				TransferResource(amount, res, ship, building.settlement)(issuer=issuer)
 
 		# NOTE: conditions are not MP-safe! no problem as long as there are no MP-scenarios
 		session.scenario_eventhandler.schedule_check(CONDITIONS.building_num_of_type_greater)
@@ -190,9 +193,14 @@ class Tear(Command):
 		"""Execute the command
 		@param issuer: the issuer of the command
 		"""
-		building = WorldObject.get_object_by_id(self.building)
-		if building is None or not building.fife_instance:
+		try:
+			building = WorldObject.get_object_by_id(self.building)
+		except WorldObjectNotFound:
+			self.log.debug("Tear: building %s already gone, not tearing it again.", self.building)
+			return # invalid command, possibly caused by mp delay
+		if building is None or building.fife_instance is None:
 			self.log.warning("Tear: attempting to tear down a building that shouldn't exist %s", building)
+			print "Tear: attempting to tear down a building that shouldn't exist %s" % building
 		else:
 			self.log.debug("Tear: tearing down %s", building)
 			building.remove()

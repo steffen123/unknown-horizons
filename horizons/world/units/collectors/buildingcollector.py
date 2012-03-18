@@ -23,11 +23,12 @@ from collections import deque
 
 from horizons.util import WorldObject, RadiusRect, Callback, decorators
 from horizons.world.pathfinding.pather import RoadPather, BuildingCollectorPather
-from horizons.constants import COLLECTORS
+from horizons.constants import COLLECTORS, BUILDINGS
 from horizons.scheduler import Scheduler
 from horizons.world.units.movingobject import MoveNotPossible
 from horizons.world.units.collectors.collector import Collector, JobList
 from horizons.world.component.storagecomponent import StorageComponent
+from horizons.world.component.collectingcompontent import CollectingComponent
 
 
 
@@ -69,7 +70,7 @@ class BuildingCollector(Collector):
 		# save job history
 		for tick, utilisation in self._job_history:
 				# pre-translate the tick number for the loading process
-			translated_tick = tick - current_tick + 1
+			translated_tick = tick - current_tick + Scheduler.FIRST_TICK_ID
 			db("INSERT INTO building_collector_job_history(collector, tick, utilisation) VALUES(?, ?, ?)", \
 				 self.worldid, translated_tick, utilisation)
 
@@ -90,8 +91,8 @@ class BuildingCollector(Collector):
 			#       fisher basically isn't a buildingcollector anymore.
 
 		# load job search failures
-		# the tick values were translated to assume that it is currently tick 0
-		assert Scheduler().cur_tick == 0
+		# the tick values were translated to assume that it is currently tick -1
+		assert Scheduler().cur_tick == Scheduler.FIRST_TICK_ID - 1
 		self._job_history = db.get_building_collector_job_history(worldid)
 
 	def register_at_home_building(self, unregister = False):
@@ -99,15 +100,17 @@ class BuildingCollector(Collector):
 		in job.object)
 		@param unregister: whether to reverse registration
 		"""
-		if unregister:
-			self.home_building.remove_local_collector(self)
-		else:
-			self.home_building.add_local_collector(self)
+		# TODO: figure out why the home_building can be None when this is run in session.end()
+		if self.home_building is not None:
+			if unregister:
+				self.home_building.get_component(CollectingComponent).remove_local_collector(self)
+			else:
+				self.home_building.get_component(CollectingComponent).add_local_collector(self)
 
 	def apply_state(self, state, remaining_ticks = None):
 		super(BuildingCollector, self).apply_state(state, remaining_ticks)
 		if state == self.states.moving_home:
-			# collector is on his way home
+			# collector is on its way home
 			self.add_move_callback(self.reached_home)
 			self.add_blocked_callback(self.handle_path_home_blocked)
 			self.show()
@@ -130,7 +133,7 @@ class BuildingCollector(Collector):
 		return self.home_building.get_component(StorageComponent).inventory
 
 	def get_colleague_collectors(self):
-		return self.home_building.get_local_collectors()
+		return self.home_building.get_component(CollectingComponent).get_local_collectors()
 
 	@decorators.make_constants()
 	def get_job(self):
@@ -191,23 +194,7 @@ class BuildingCollector(Collector):
 			self.move_home(callback=self.reached_home)
 		super(BuildingCollector, self).finish_working()
 
-	""" unused for now
-	def reroute(self):
-		""Reroutes the collector to a different job, or home if no job is found.
-		Can be called the current job can't be executed any more""
-		self.log.debug("%s reroute", self)
-		# Get a new job
-		job = self.get_job()
-		# Check if there is a new job
-		if job is not None:
-			# There is a new job!
-			self.job = job
-			self.begin_current_job()
-		else:
-			# There is no new job...
-			# Return home and end job
-			self.move_home(callback=self.reached_home)
-	"""
+	# unused reroute code removed in 2aef7bba77536da333360566467d9a2f08d38cab
 
 	def reached_home(self):
 		"""Exchanges resources with home and calls end_job"""
@@ -329,7 +316,7 @@ class FisherShipCollector(BuildingCollector):
 		fishers = []
 		for settlement in session.world.settlements:
 			if settlement.owner == owner:
-				fishers.extend(settlement.get_buildings_by_id(11))
+				fishers.extend(settlement.buildings_by_id[BUILDINGS.FISHERMAN_CLASS])
 		smallest_fisher = fishers.pop()
 		for fisher in fishers:
 			if len(smallest_fisher.get_local_collectors()) > len(fisher.get_local_collectors()):
@@ -344,9 +331,24 @@ class FisherShipCollector(BuildingCollector):
 		reach = RadiusRect(self.home_building.position, self.home_building.radius)
 		return self.session.world.get_providers_in_range(reach, reslist=reslist)
 
+class DisasterRecoveryCollector(StorageCollector):
+	"""Collects disasters such as fire or pestilence."""
+	def finish_working(self, collector_already_home=False):
+		super(DisasterRecoveryCollector, self).finish_working(collector_already_home=collector_already_home)
+		building = self.job.object
+		if hasattr(building, "disaster"): # make sure that building hasn't recovered any other way
+			building.disaster.recover(building)
+
+	def get_job(self):
+		if self.home_building is not None and \
+		   not self.session.world.disaster_manager.is_affected( self.home_building.settlement ):
+			return None # not one disaster active, bail out
+
+		return super(DisasterRecoveryCollector, self).get_job()
 
 decorators.bind_all(BuildingCollector)
 decorators.bind_all(FieldCollector)
 decorators.bind_all(FisherShipCollector)
 decorators.bind_all(SettlerCollector)
 decorators.bind_all(StorageCollector)
+decorators.bind_all(DisasterRecoveryCollector)

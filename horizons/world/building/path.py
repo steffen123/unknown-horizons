@@ -25,9 +25,10 @@ from horizons.constants import LAYERS, BUILDINGS
 from horizons.world.building.building import BasicBuilding
 from horizons.world.building.buildable import BuildableLine, BuildableSingle
 from horizons.scheduler import Scheduler
+from horizons.world.componentholder import ComponentHolder
 
 
-class Path(object):
+class Path(ComponentHolder):
 	"""Object with path functionality"""
 	walkable = True
 
@@ -62,8 +63,6 @@ class Path(object):
 				tile.object.recalculate_orientation()
 
 	def recalculate_orientation(self):
-		"""
-		"""
 		# orientation is a string containing a, b, c and/or d
 		# corresponding actions are saved in the db
 		action = ''
@@ -78,7 +77,7 @@ class Path(object):
 			   self.owner == tile.object.owner:
 				action += action_part
 		if action == '':
-			action = 'ac' # default
+			action = 'single' # single trail piece with no neighbours
 
 		location = self._instance.getLocation()
 		location.setLayerCoordinates(fife.ModelCoordinate(int(origin.x + 1), int(origin.y), 0))

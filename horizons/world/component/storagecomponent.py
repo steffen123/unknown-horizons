@@ -35,12 +35,11 @@ class StorageComponent(Component):
 		self.has_own_inventory = not isinstance(self.inventory, SettlementStorage)
 
 	def initialize(self):
+		# NOTE: also called on load (initialize usually isn't)
 		if self.inventory is None:
 			self.create_inventory()
 		elif not self.has_own_inventory:
 			self.inventory = self.instance.settlement.get_component(StorageComponent).inventory
-
-		self.inventory.add_change_listener(self.instance._changed)
 
 	def remove(self):
 		super(StorageComponent, self).remove()
@@ -77,11 +76,12 @@ class StorageComponent(Component):
 			self.inventory.load(db, worldid)
 
 	@classmethod
-	def get_instance(cls, arguments={}):
+	def get_instance(cls, arguments=None):
+		arguments = arguments or {}
 		inventory = None
 		if 'inventory' in arguments:
 			assert len(arguments['inventory']) == 1, "You may not have more than one inventory!"
-			for key, value in arguments['inventory'].iteritems():
-				storage = cls.storage_mapping[key]
-				inventory = storage(**value)
+			key, value = arguments['inventory'].items()[0]
+			storage = cls.storage_mapping[key]
+			inventory = storage(**value)
 		return cls(inventory=inventory)

@@ -23,7 +23,7 @@ __all__ = ['building', 'unit', 'sounds']
 
 import logging
 
-from horizons.util import WorldObject
+from horizons.util import WorldObject, get_all_subclasses
 from horizons.network.packets import SafeUnpickler
 
 class Command(object):
@@ -38,7 +38,7 @@ class Command(object):
 		"""
 		SafeUnpickler.add('server', klass)
 
-	def execute(self, session, local = False):
+	def execute(self, session, local=False):
 		"""Execute command.
 		@param session: Execute command on this session's manager.
 		@param local: Execute the command only locally (only used in multiplayer manager)
@@ -46,10 +46,16 @@ class Command(object):
 		"""
 		return session.manager.execute(self, local)
 
+	@classmethod
+	def get_all_commands(cls):
+		return list(get_all_subclasses(cls))
+
+
 class GenericCommand(Command):
 	"""Code generator for trivial commands on an object.
 	It saves an object's world id, and executes a method specified as string on it in __call__
 
+	NOTE: Do not use floats! 2.6 and 2.7 handle them differently.
 	Use like this to call obj.mymethod(42, 1337):
 
 	class MyCommand(GenericCommand):
@@ -68,20 +74,15 @@ class GenericCommand(Command):
 	def _get_object(self):
 		return WorldObject.get_object_by_id(self.obj_id)
 
+	def __str__(self):
+		return "GenericCommand(%s, %s, %s, %s, %s)" % (self.__class__, self._get_object(), self.method, self.args, self.kwargs)
+
 class GenericComponentCommand(Command):
-	"""Code generator for trivial commands on an object.
-	It saves an object's world id, and executes a method specified as string on it in __call__
-
-	Use like this to call obj.mymethod(42, 1337):
-
-	class MyCommand(GenericCommand):
-	  def __init__(self, obj):
-	    super(MyCommand,self).__init__(obj, "mymethod", 42, 1337)
-	 """
-	def __init__(self, obj, component_name, method, *args, **kwargs):
-		self.obj_id = obj.worldid
+	"""Code generator for trivial commands on a component."""
+	def __init__(self, component, method, *args, **kwargs):
+		self.obj_id = component.instance.worldid
 		self.method = method
-		self.component_name = component_name
+		self.component_name = component.NAME
 		self.args = args
 		self.kwargs = kwargs
 
@@ -90,3 +91,6 @@ class GenericComponentCommand(Command):
 
 	def _get_object(self):
 		return WorldObject.get_object_by_id(self.obj_id)
+
+	def __str__(self):
+		return "GenericCompCommand(%s, %s, %s, %s, %s, %s)" % (self.__class__, self._get_object(), self.component_name, self.method, self.args, self.kwargs)

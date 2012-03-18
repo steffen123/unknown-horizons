@@ -84,6 +84,10 @@ class TabInterface(object):
 		"""Hides the current widget"""
 		self.widget.hide()
 
+	def is_visible(self):
+		# naming convention clash: python vs c++
+		return self.widget.isVisible()
+
 	def refresh(self):
 		"""This function is called by the TabWidget to redraw the widget."""
 		pass
@@ -146,4 +150,4 @@ class TabInterface(object):
 
 	def __del__(self):
 		"""Do cleanup work here."""
-		pass
+		self.widget = None

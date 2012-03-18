@@ -20,7 +20,6 @@
 # ###################################################
 
 import logging
-import random
 
 from fife import fife
 
@@ -28,15 +27,13 @@ from horizons.scheduler import Scheduler
 
 from horizons.world.concreteobject import ConcreteObject
 from horizons.world.settlement import Settlement
-from horizons.world.component.ambientsoundcomponent import AmbientSoundComponent
 from horizons.util import ConstRect, Point, WorldObject, ActionSetLoader, decorators
 from horizons.constants import RES, LAYERS, GAME
 from horizons.world.building.buildable import BuildableSingle
-from horizons.gui.tabs import EnemyBuildingOverviewTab
 from horizons.command.building import Build
 from horizons.world.component.storagecomponent import StorageComponent
 from horizons.world.componentholder import ComponentHolder
-from horizons.world.building.selectablebuilding import SelectableBuilding
+from horizons.util.messaging.message import RemoveAllStatusIcons
 
 
 class BasicBuilding(ComponentHolder, ConcreteObject):
@@ -49,9 +46,8 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 	tearable = True
 	show_buildingtool_preview_tab = True # whether to show the tab of the building. not shown for
 																			# e.g. paths. the tab hides a part of the map.
-	tabs = ()
-	enemy_tabs = (EnemyBuildingOverviewTab, )
 	layer = LAYERS.OBJECTS
+
 
 	log = logging.getLogger("world.building")
 
@@ -63,9 +59,10 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 	@param action_set_id: use this action set id. None means choose one at random
 	"""
 	def __init__(self, x, y, rotation, owner, island, level=None, action_set_id=None, **kwargs):
+		self.__pre_init(owner, rotation, Point(x, y), level=level)
 		super(BasicBuilding, self).__init__(x=x, y=y, rotation=rotation, owner=owner, \
 								                        island=island, **kwargs)
-		self.__init(Point(x, y), rotation, owner, level, action_set_id=action_set_id)
+		self.__init( action_set_id=action_set_id )
 		self.island = island
 
 		settlements = self.island.get_settlements(self.position, owner)
@@ -78,23 +75,31 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 
 		assert self.settlement is None or isinstance(self.settlement, Settlement)
 
-	def __init(self, origin, rotation, owner, level=None, remaining_ticks_of_month=None, action_set_id=None):
-		self.owner = owner # also set in load() as workaround
+
+	def __pre_init(self, owner, rotation, origin, level=None):
+		"""Here we face the awkward situation of requiring a forth init function.
+		It is called like __init, but before other parts are inited via super().
+		This is necessary since some attributes are used by these other parts."""
+		self.owner = owner
 		if level is None:
 			level = 0 if self.owner is None else self.owner.settler_level
 		self.level = level
-		self._action_set_id = action_set_id if action_set_id is not None else \
-		    self.get_random_action_set(self.level)[0]
 		self.rotation = rotation
 		if self.rotation in (135, 315): # Rotate the rect correctly
 			self.position = ConstRect(origin, self.size[1]-1, self.size[0]-1)
 		else:
 			self.position = ConstRect(origin, self.size[0]-1, self.size[1]-1)
 
+	def __init(self, remaining_ticks_of_month=None, action_set_id=None):
+		self._action_set_id = action_set_id if action_set_id is not None else \
+		    self.get_random_action_set(self.level)[0]
+
 		self.loading_area = self.position # shape where collector get resources
 
-		self._instance, action_set_id = self.getInstance(self.session, origin.x, origin.y, rotation=rotation,\
-		                                                 action_set_id=self._action_set_id)
+		origin = self.position.origin
+		self._instance, action_set_id = \
+		  self.getInstance(self.session, origin.x, origin.y, rotation=self.rotation,\
+		                   action_set_id=self._action_set_id)
 		self._instance.setId(str(self.worldid))
 
 		if self.has_running_costs: # Get payout every 30 seconds
@@ -102,14 +107,6 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 			run_in = remaining_ticks_of_month if remaining_ticks_of_month is not None else interval
 			Scheduler().add_new_object(self.get_payout, self, \
 			                           run_in=run_in, loops=-1, loop_interval=interval)
-
-		# play ambient sound, if available every 30 seconds
-		if self.session.world.player == self.owner:
-			if self.has_component(AmbientSoundComponent):
-				play_every = 15 + random.randint(0, 15)
-				for soundfile in self.get_component(AmbientSoundComponent).soundfiles:
-					self.get_component(AmbientSoundComponent).play_ambient(soundfile, True, play_every)
-
 
 	def toggle_costs(self):
 		self.running_costs , self.running_costs_inactive = \
@@ -126,7 +123,11 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 	def remove(self):
 		"""Removes the building"""
 		self.log.debug("building: remove %s", self.worldid)
+		if hasattr(self, "disaster"):
+			self.disaster.recover(self)
 		self.island.remove_building(self)
+		if self.has_status_icon:
+			self.session.message_bus.broadcast(RemoveAllStatusIcons(self, self))
 		#instance is owned by layer...
 		#self._instance.thisown = 1
 		super(BasicBuilding, self).remove()
@@ -149,17 +150,23 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 
 		owner_id = db.get_settlement_owner(location)
 		owner = None if owner_id is None else WorldObject.get_object_by_id(owner_id)
-		# WORKAROUND: owner should actually be set in __init, but super().load() calls can require it
-		self.owner = owner
+		self.__pre_init(owner, rotation, Point(x, y))
 
 		super(BasicBuilding, self).load(db, worldid)
 
 		remaining_ticks_of_month = None
 		if self.has_running_costs:
-			remaining_ticks_of_month = db("SELECT ticks FROM remaining_ticks_of_month WHERE rowid=?", worldid)[0][0]
+			db_data = db("SELECT ticks FROM remaining_ticks_of_month WHERE rowid=?", worldid)
+			if len(db_data) == 0:
+				# this can happen when running costs are set when there were no before
+				# we shouldn't crash because of changes in yaml code, still it's suspicous
+				print 'WARNING: object %s of type %s does not know when to pay its rent.'
+				print 'Disregard this when loading old savegames or on running cost changes.'
+				remaining_ticks_of_month = 1
+			else:
+				remaining_ticks_of_month = db_data[0][0]
 
-		self.__init(Point(x, y), rotation, owner, level=level, \
-		            remaining_ticks_of_month=remaining_ticks_of_month)
+		self.__init(remaining_ticks_of_month=remaining_ticks_of_month)
 
 
 		# island.add_building handles registration of building for island and settlement
@@ -174,11 +181,6 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 		if isinstance(location_obj, Settlement):
 			# workaround: island can't be fetched from world, because it isn't fully constructed
 			island = WorldObject.get_object_by_id(db.get_settlement_island(location_obj.worldid))
-			# settlement might not have been registered in island, so do it if getter fails
-			"""
-			settlement = island.get_settlement(self.position.center()) or \
-								 island.add_existing_settlement(self.position, self.radius, location_obj, load=True)
-								 """
 			settlement = location_obj
 		else: # loc is island
 			island = location_obj
@@ -188,13 +190,11 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 	def get_buildings_in_range(self):
 		# TODO Think about moving this to the Settlement class
 		buildings = self.settlement.buildings
-		ret_building = []
 		for building in buildings:
-			if building == self:
+			if building is self:
 				continue
 			if self.position.distance( building.position ) <= self.radius:
-				ret_building.append( building )
-		return ret_building
+				yield building
 
 	def update_action_set_level(self, level=0):
 		"""Updates this buildings action_set to a random actionset from the specified level
@@ -312,17 +312,12 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 		"""This function is called when the building is built, to start production for example."""
 		pass
 
-	@property
-	def name(self):
-		return self._name
-
-
 	#@decorators.relese_mode(ret="Building")
 	def __str__(self): # debug
 		return '%s(id=%s;worldid=%s)' % (self.name, self.id, self.worldid if hasattr(self, 'worldid') else 'none')
 
 
-class DefaultBuilding(BasicBuilding, SelectableBuilding, BuildableSingle):
+class DefaultBuilding(BasicBuilding, BuildableSingle):
 	"""Building with default properties, that does nothing."""
 	pass
 

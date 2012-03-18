@@ -1,6 +1,6 @@
 id: 32
 name: _ Tavern
-baseclass: production.SettlerServiceProvider
+baseclass: production.ProductionBuilding
 radius: 6
 cost: 5
 cost_inactive: 0
@@ -13,6 +13,10 @@ tooltip_text: _ Provides get-together.
 settler_level: 2
 buildingcosts: {1: 250, 4: 4, 7: 2}
 components:
+- SelectableComponent:
+    type: building
+    tabs: [ProductionOverviewTab]
+    enemy_tabs: [EnemyBuildingOverviewTab,]
 - HealthComponent: {maxhealth: 1000}
 - ProducerComponent:
     productionlines:
@@ -26,5 +30,8 @@ components:
     inventory:
       SlotsStorage:
         slot_sizes: {27: 12, 22: 4}
+- CollectingComponent:
+    collectors:
+      1000002: 1
 actionsets:
   as_tavern0: {level: 0}

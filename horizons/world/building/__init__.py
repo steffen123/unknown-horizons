@@ -40,16 +40,13 @@ class BuildingClass(IngameType):
 	def __new__(self, db, id, yaml_data):
 		return super(BuildingClass, self).__new__(self, id, yaml_data)
 
-	def __init__(self, db, id, yaml_data=[]):
+	def __init__(self, db, id, yaml_data):
 		"""
 		Final loading for the building class. Load a lot of attributes for the building classes
 		@param id: building id.
 		@param db: DbReader
 		"""
 		super(BuildingClass, self).__init__(id, yaml_data)
-
-		# Override name with translation here
-		self._name = object_translations[yaml_data['yaml_file']]['name']
 
 		self.settler_level = yaml_data['settler_level']
 		try:

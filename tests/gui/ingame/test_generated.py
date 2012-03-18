@@ -39,12 +39,14 @@ def test_build_a_settlement(gui):
 	gui.cursor_click(57, 0, 'right')
 
 	# Wait for ship to arrive
-	for i in gui.run(seconds=7): yield
+	while (ship.position.x, ship.position.y) != (57, 0):
+		yield
 
 	gui.trigger('overview_trade_ship', 'found_settlement/action/default')
 
 	# Place warehouse
 	gui.cursor_click(56, 3, 'left')
+	assert gui.session.world.settlements
 
 	# Select buildmenu
 	gui.trigger('mainhud', 'build/action/default')

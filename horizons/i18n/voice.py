@@ -31,6 +31,7 @@ Internationalization for speech|voice files
 """
 class Speech:
 	"""Definition of category names, those names are the name of directory where speech should be"""
+	CHAT = None
 	NEW_SETTLEMENT = "new_settlement"
 	NEW_WORLD = "new_world"
 	SAVED_GAME = None
@@ -43,10 +44,19 @@ class Speech:
 	SETTLERS_MOVED_OUT = None
 	MINE_EMPTY = None
 	DRAG_ROADS_HINT = None
-	DIPLOMACY_STATUS_CHANGED = None
+	DIPLOMACY_STATUS_ALLY_NEUTRAL = None
+	DIPLOMACY_STATUS_ALLY_ENEMY = None
+	DIPLOMACY_STATUS_ENEMY_ALLY = None
+	DIPLOMACY_STATUS_ENEMY_NEUTRAL = None
+	DIPLOMACY_STATUS_NEUTRAL_ALLY = None
+	DIPLOMACY_STATUS_NEUTRAL_ENEMY = None
 	MAX_INCR_REACHED = None
 	YOU_HAVE_WON = None
 	FIELD_NEEDS_FARM = None
+	WAREHOUSE_NOT_TEARABLE = None
+	ROUTE_DISABLED = None
+	MOVE_OUTSIDE_OF_WORLD = None
+	MOVE_INVALID_LOCATION = None
 
 DEFAULT_LANG="en"
 DEFAULT_VARIATION=0

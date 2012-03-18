@@ -19,13 +19,14 @@
 # Free Software Foundation, Inc.,
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
-from fife.extensions.pychan.widgets import Icon
 
-from horizons.gui.widgets  import TooltipButton
+from fife.extensions.pychan.widgets import Icon, ImageButton
+
 from horizons.gui.tabs import OverviewTab
 from horizons.util.gui import load_uh_widget
 from horizons.util import Callback
 from horizons.entities import Entities
+from horizons.world.component.selectablecomponent import SelectableComponent
 
 class BuildRelatedTab(OverviewTab):
 	"""
@@ -42,7 +43,7 @@ class BuildRelatedTab(OverviewTab):
 		    instance = instance,
 		    icon_path = 'content/gui/icons/tabwidget/production/related_%s.png'
 		)
-		self.tooltip = _("Build related fields")
+		self.helptext = _("Build related fields")
 
 	def refresh(self):
 		"""
@@ -88,10 +89,10 @@ class BuildRelatedTab(OverviewTab):
 		if level <= self.instance.owner.settler_level:
 			# {{mode}} in double braces because it is replaced as a second step
 			path = "content/gui/icons/buildmenu/{id:03d}{{mode}}.png".format(id=building_id)
-			tooltip = self.instance.session.db.get_building_tooltip(building_id)
+			helptext = self.instance.session.db.get_building_tooltip(building_id)
 
-			build_button = TooltipButton(name="build{id}".format(id=building_id), \
-			                             tooltip=tooltip)
+			build_button = ImageButton(name="build{id}".format(id=building_id), \
+			                             helptext=helptext)
 			build_button.up_image = path.format(mode='')
 			build_button.down_image = path.format(mode='_h')
 			build_button.hover_image = path.format(mode='_h')
@@ -112,7 +113,7 @@ class BuildRelatedTab(OverviewTab):
 
 		# deselect all
 		for instance in self.instance.session.selected_instances:
-			instance.deselect()
+			instance.get_component(SelectableComponent).deselect()
 		self.instance.session.selected_instances.clear()
 
 		self.instance.session.set_cursor('building', Entities.buildings[building_id], \

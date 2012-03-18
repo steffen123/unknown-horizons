@@ -62,7 +62,7 @@ class VERSION:
 	#RELEASE_VERSION = u'2011.3'
 
 	## +=1 this if you changed the savegame "api"
-	SAVEGAMEREVISION= 49
+	SAVEGAMEREVISION= 55
 
 	@staticmethod
 	def string():
@@ -72,14 +72,28 @@ class VERSION:
 class UNITS:
 	# ./development/print_db_data.py unit
 	HUKER_SHIP_CLASS           = 1000001
-	PLAYER_SHIP_CLASS          = HUKER_SHIP_CLASS
 	BUILDING_COLLECTOR_CLASS   = 1000002
-	FISHER_BOAT                = 1000004
+	FISHER_BOAT_CLASS          = 1000004
 	PIRATE_SHIP_CLASS          = 1000005
 	TRADER_SHIP_CLASS          = 1000006
 	WILD_ANIMAL_CLASS          = 1000013
 	USABLE_FISHER_BOAT         = 1000016
-	FRIGATE                    = 1000020
+	FRIGATE_CLASS              = 1000020
+
+	# players will be spawned with an instance of this
+	PLAYER_SHIP_CLASS          = HUKER_SHIP_CLASS
+	#PLAYER_SHIP_CLASS          = FRIGATE_CLASS
+
+	# collectors
+	ANIMAL_COLLECTOR_CLASS      = 1000007
+	BUILDING_COLLECTOR_CLASS    = 1000002
+	DISASTER_RECOVERY_COLLECTOR_CLASS = 1000022
+	FARM_ANIMAL_COLLECTOR_CLASS = 1000015
+	FIELD_COLLECTOR_CLASS       = 1000009
+	HUNTER_COLLECTOR_CLASS      = 1000014
+	LUMBERJACK_COLLECTOR_CLASS  = 1000010
+	SETTLER_COLLECTOR_CLASS     = 1000011
+	STORAGE_COLLECTOR_CLASS     = 1000008
 
 	DIFFERENCE_BUILDING_UNIT_ID = 1000000
 
@@ -124,6 +138,7 @@ class BUILDINGS:
 	SALT_PONDS_CLASS = 35
 	TOBACCO_FIELD_CLASS = 36
 	TOBACCONIST_CLASS = 37
+	FIRE_STATION_CLASS = 45
 
 	TRANSPARENCY_VALUE = 180
 
@@ -150,7 +165,7 @@ class RES:
 	FOOD_ID = 5
 	TOOLS_ID = 6
 	BRICKS_ID = 7
-	WOOD_ID = 8
+	TREES_ID = 8
 	WOOL_ID = 10
 	FAITH_ID = 11
 	WILDANIMALFOOD_ID = 12
@@ -171,6 +186,8 @@ class RES:
 	TOBACCO_PLANTS_ID = 30
 	TOBACCO_LEAVES_ID = 31
 	TOBACCO_PRODUCTS_ID = 32
+	CANNON_ID = WEAPONS.CANNON
+	FIRE_ID = 99
 
 class GROUND:
 	DEFAULT_LAND = (3, "straight", 45)
@@ -249,7 +266,7 @@ class PRODUCTIONLINES:
 	HUKER = 15
 	FISHING_BOAT = None # will get added later
 	FRIGATE = 58
-	WOOD = 2
+	TREES = 2
 
 ## GAME-RELATED, BALANCING VALUES
 class GAME:
@@ -258,6 +275,9 @@ class GAME:
 
 	WORLD_WORLDID = 0 # worldid of World object
 	MAX_TICKS = None # exit after on tick MAX_TICKS (disabled by setting to None)
+
+class GUI:
+	CITYINFO_UPDATE_DELAY = 2 # seconds
 
 # Messagewidget and Logbook
 class MESSAGES:
@@ -286,7 +306,8 @@ class SETTLER:
 	SAILOR_LEVEL = 0
 	PIONEER_LEVEL = 1
 	SETTLER_LEVEL = 2
-	CURRENT_MAX_INCR = 2 # counting starts at 0!
+	CITIZEN_LEVEL = 3
+	CURRENT_MAX_INCR = 3 # counting starts at 0!
 	TAX_SETTINGS_MIN = 0.5
 	TAX_SETTINGS_MAX = 1.5
 	TAX_SETTINGS_STEP = 0.1
@@ -342,6 +363,18 @@ else:
 	_user_dir = os.path.join(my_games, 'unknown-horizons')
 _user_dir = unicode(_user_dir, locale.getpreferredencoding()) # this makes umlaut-paths work on win
 
+class GFX:
+	BUILDING_OUTLINE_THRESHOLD = 96
+	BUILDING_OUTLINE_WIDTH = 2
+
+	UNIT_OUTLINE_THRESHOLD = 96
+	UNIT_OUTLINE_WIDTH = 2
+
+	SHIP_OUTLINE_THRESHOLD = 96
+	SHIP_OUTLINE_WIDTH = 2
+
+	USE_ATLASES = False
+
 class PATHS:
 	# paths in user dir
 	USER_DIR = _user_dir
@@ -355,11 +388,16 @@ class PATHS:
 	SAVEGAME_TEMPLATE = os.path.join("content", "savegame_template.sql")
 	ISLAND_TEMPLATE = os.path.join("content", "island_template.sql")
 	ACTION_SETS_JSON_FILE = os.path.join("content", "actionsets.json")
+	TILE_SETS_JSON_FILE = os.path.join("content", "tilesets.json")
 
 	CONFIG_TEMPLATE_FILE = os.path.join("content", "settings-template.xml")
 
 	DB_FILES = tuple(os.path.join("content", i) for i in \
-	                 ("game.sql", "balance.sql", "atlas.sql") )
+	                 ("game.sql", "balance.sql"))
+
+	if GFX.USE_ATLASES:
+		DB_FILES = DB_FILES + (os.path.join("content", "atlas.sql"), )
+
 	#voice paths
 	VOICE_DIR = os.path.join("content", "audio", "voice")
 
@@ -436,12 +474,3 @@ FONTDEFS = {
 
 AUTO_CONTINUE_CAMPAIGN=True
 
-class GFX:
-	BUILDING_OUTLINE_THRESHOLD = 96
-	BUILDING_OUTLINE_WIDTH = 2
-
-	UNIT_OUTLINE_THRESHOLD = 96
-	UNIT_OUTLINE_WIDTH = 2
-
-	SHIP_OUTLINE_THRESHOLD = 96
-	SHIP_OUTLINE_WIDTH = 2

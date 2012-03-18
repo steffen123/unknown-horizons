@@ -20,16 +20,15 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
-import weakref
-
 from fife import fife
 import horizons.main
 
 from horizons.gui.mousetools.cursortool import CursorTool
-from horizons.util import Point, WorldObject
+from horizons.util import WorldObject
 from horizons.util.lastactiveplayersettlementmanager import LastActivePlayerSettlementManager
-from horizons.gui.widgets.tooltip import TooltipIcon
 from horizons.constants import LAYERS
+
+from fife.extensions.pychan import widgets
 
 class NavigationTool(CursorTool):
 	"""Navigation Class to process mouse actions ingame"""
@@ -38,7 +37,7 @@ class NavigationTool(CursorTool):
 
 	def __init__(self, session):
 		super(NavigationTool, self).__init__(session)
-		self.lastScroll = [0, 0]
+		self._last_mmb_scroll_point = [0, 0]
 		self.lastmoved = fife.ExactModelCoordinate()
 		self.middle_scroll_active = False
 
@@ -47,7 +46,7 @@ class NavigationTool(CursorTool):
 		horizons.main.fife.eventmanager.addCommandListener(self.cmdlist)
 		self.cmdlist.onCommand = self.onCommand
 
-		class CoordsTooltip(TooltipIcon):
+		class CoordsTooltip(object):
 			@classmethod
 			def get_instance(cls, cursor_tool):
 				if cursor_tool.session.coordinates_tooltip is not None:
@@ -63,45 +62,44 @@ class NavigationTool(CursorTool):
 				self.cursor_tool = cursor_tool
 				self.enabled = False
 
+				# can't import Icon directly since it won't have tooltips
+				# TODO: find a way to make this obvious
+				self.icon = widgets.WIDGETS['Icon']()
+
 			def toggle(self):
 				self.enabled = not self.enabled
-				if not self.enabled and self.tooltip_shown:
-					self.hide_tooltip()
+				if not self.enabled and self.icon.tooltip_shown:
+					self.icon.hide_tooltip()
 
 			def show_evt(self, evt):
 				if self.enabled:
 					x, y = self.cursor_tool.get_world_location_from_event(evt).to_tuple()
-					self.tooltip = str(x) + ', ' + str(y) + " "+_("Press H to remove this hint")
-					self.position_tooltip(evt)
-					self.show_tooltip()
+					self.icon.helptext = str(x) + ', ' + str(y) + " "+_("Press H to remove this hint")
+					self.icon.position_tooltip(evt)
+					self.icon.show_tooltip()
 
 		self.tooltip = CoordsTooltip.get_instance(self)
 
 	def remove(self):
 		horizons.main.fife.eventmanager.removeCommandListener(self.cmdlist)
-		self.session.view.autoscroll(-self.lastScroll[0], -self.lastScroll[1])
 		super(NavigationTool, self).remove()
 
 	def mousePressed(self, evt):
 		if (evt.getButton() == fife.MouseEvent.MIDDLE):
-			return # deactivated because of bugs (see #582)
-			self.session.view.scroll(-self.lastScroll[0], -self.lastScroll[1])
-			self.lastScroll = [evt.getX(), evt.getY()]
+			self._last_mmb_scroll_point = (evt.getX(), evt.getY())
 			self.middle_scroll_active = True
 
 	def mouseReleased(self, evt):
 		if (evt.getButton() == fife.MouseEvent.MIDDLE):
-			return # deactivated because of bugs (see #582)
-			self.lastScroll = [0, 0]
-			CursorTool.mouseMoved(self, evt)
 			self.middle_scroll_active = False
 
-	# drag ingamemap via MIDDLE mouse button
 	def mouseDragged(self, evt):
 		if (evt.getButton() == fife.MouseEvent.MIDDLE):
-			return # deactivated because of bugs (see #582)
-			self.session.view.scroll(self.lastScroll[0] - evt.getX(), self.lastScroll[1] - evt.getY())
-			self.lastScroll = [evt.getX(), evt.getY()]
+			if self.middle_scroll_active:
+				scroll_by = ( self._last_mmb_scroll_point[0] - evt.getX(),
+				              self._last_mmb_scroll_point[1] - evt.getY() )
+				self.session.view.scroll( *scroll_by )
+				self._last_mmb_scroll_point = (evt.getX(), evt.getY())
 		else:
 			# Else the event will mistakenly be delegated if the left mouse button is hit while
 			# scrolling using the middle mouse button
@@ -177,3 +175,7 @@ class NavigationTool(CursorTool):
 			instance = WorldObject.get_object_by_id(int(id))
 			hover_instances.append(instance)
 		return hover_instances
+
+	def end(self):
+		super(NavigationTool, self).end()
+		self.helptext = None

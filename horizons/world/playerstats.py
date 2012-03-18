@@ -28,6 +28,7 @@ from horizons.entities import Entities
 from horizons.constants import SETTLER, BUILDINGS, PRODUCTION, RES, UNITS
 from horizons.util.python import decorators
 from horizons.world.component.storagecomponent import StorageComponent
+from horizons.world.component.selectablecomponent import SelectableComponent
 from horizons.world.production.producer import Producer
 
 class PlayerStats(WorldObject):
@@ -94,7 +95,7 @@ class PlayerStats(WorldObject):
 		for ship in self.player.session.world.ships:
 			if ship.owner is self.player:
 				ships[ship.id] += 1
-				if ship.is_selectable:
+				if ship.has_component(SelectableComponent):
 					for resource_id, amount in ship.get_component(StorageComponent).inventory:
 						available_resources[resource_id] += amount
 
@@ -109,8 +110,18 @@ class PlayerStats(WorldObject):
 		self._calculate_money_score(running_costs, taxes, self.player.get_component(StorageComponent).inventory[RES.GOLD_ID])
 		self._calculate_total_score()
 
-	settler_values = {SETTLER.SAILOR_LEVEL: 2, SETTLER.PIONEER_LEVEL: 3, SETTLER.SETTLER_LEVEL: 7}
-	settler_building_values = {SETTLER.SAILOR_LEVEL: 3, SETTLER.PIONEER_LEVEL: 5, SETTLER.SETTLER_LEVEL: 11}
+	settler_values = {
+			SETTLER.SAILOR_LEVEL: 2,
+			SETTLER.PIONEER_LEVEL: 3,
+			SETTLER.SETTLER_LEVEL: 7,
+			SETTLER.CITIZEN_LEVEL: 15,
+			}
+	settler_building_values = {
+			SETTLER.SAILOR_LEVEL: 3,
+			SETTLER.PIONEER_LEVEL: 5,
+			SETTLER.SETTLER_LEVEL: 11,
+			SETTLER.CITIZEN_LEVEL: 19,
+			}
 	settler_resource_provided_coefficient = 0.1
 	settler_score_coefficient = 0.3
 
@@ -162,7 +173,7 @@ class PlayerStats(WorldObject):
 					total += extra_amount * value * self.unavailable_resource_coefficient
 		self.resource_score = int(total * self.resource_score_coefficient)
 
-	unit_value = {UNITS.FRIGATE: 1.5, UNITS.PLAYER_SHIP_CLASS: 1, UNITS.USABLE_FISHER_BOAT: 1, UNITS.FISHER_BOAT: 0.05}
+	unit_value = {UNITS.FRIGATE_CLASS: 1.5, UNITS.PLAYER_SHIP_CLASS: 1, UNITS.USABLE_FISHER_BOAT: 1, UNITS.FISHER_BOAT_CLASS: 0.05}
 	unit_score_coefficient = 10
 
 	def _calculate_unit_score(self, ships):

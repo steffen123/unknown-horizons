@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<Container name="resbar_resource_selection" position="0,5" size="250,350"
+	background_image='content/gui/images/background/mainmenu/ingame.png'>
+
+	<Label name="headline" text="Select resource:" position="50,7"
+		helptext="The resource you select is displayed instead of the current one. Empty by clicking on X."
+		comment="Please keep the translation similarly short and concise, else the tooltip is not well understood by players." />
+	<Icon image="content/gui/images/background/hr.png" position="20,30" />
+
+	<!-- Displays list of resources to select one for trade. -->
+	<ScrollArea min_size="220,270" max_size="270,270" size="220,270" position="15,35">
+		<VBox name="resources" size="220,0">
+		<Spacer />
+		</VBox>
+	</ScrollArea>
+
+	<Icon image="content/gui/images/background/hr.png" position="20,300" />
+
+	<HBox position="15,310">
+		<Button name="make_default_btn" text="Save as default" helptext="Save current resource configuration as default for all settlements."/>
+		<Button name="reset_default_btn" text="Restore default" helptext="Reset default resource configuration for all settlements."/>
+	</HBox>
+
+</Container>

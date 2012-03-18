@@ -18,7 +18,7 @@
 
 		<Label name="exit_to_mp_menu_lbl"  text="Leave:"  position="75,470" />
 		<CancelButton position="120,460"
-			name="cancel"  tooltip="Exit gamelobby" />
+			name="cancel"  helptext="Exit gamelobby" />
 	</Container>
 
 
@@ -28,11 +28,13 @@
 			text="The game will start as soon as enough players have joined." />
 
 		<Label name="startmessage"  text="Game details:"  position="0,100" />
-		<VBox position="130,100">
+		<VBox position="130,100" name="game_info">
 			<Label name="game_map"/>
+			<Label name="game_name"/>
 			<Label name="game_creator"/>
 			<Label name="game_playersnum"/>
 			<Label name="game_players"/>
+			<Label name="game_isloaded"/>
 		</VBox>
 	</Container>
 

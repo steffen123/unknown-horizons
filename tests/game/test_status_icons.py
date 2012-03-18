@@ -25,61 +25,51 @@ from horizons.world.production.producer import Producer
 from horizons.world.component.storagecomponent import StorageComponent
 from horizons.constants import BUILDINGS, RES
 from horizons.world.status import SettlerUnhappyStatus, DecommissionedStatus, ProductivityLowStatus, InventoryFullStatus
-from mock import Mock
+from horizons.util.messaging.message import AddStatusIcon
 
+import mock
 from tests.game import settle, game_test
+
+def assert_called_with_icon(cb, icon):
+	assert cb.called
+	# the first and only parameter is the message send
+	assert cb.call_args[0][0].icon.__class__ == icon
+
 
 @game_test
 def test_productivity_low(session, player):
 	settlement, island = settle(session)
 
-	lj = Build(BUILDINGS.LUMBERJACK_CLASS, 30, 30, island, settlement=settlement)(player)
+	Build(BUILDINGS.CHARCOAL_BURNER_CLASS, 30, 30, island, settlement=settlement)(player)
 
-	# precondition
-	assert abs(lj.get_component(Producer).capacity_utilisation) < 0.0001
+	cb = mock.Mock()
+	session.message_bus.subscribe_globally(AddStatusIcon, cb)
 
-	# must be low
-	icons = lj.get_status_icons()
-	assert len(icons) == 1
-	assert isinstance(icons[0], ProductivityLowStatus)
+	# Not yet low
+	assert not cb.called
 
-	# set capac util to 100, can't change the property directly
-	get_comp_orig = lj.get_component
-	# change get_component to give our fake obj, whose dict is copied from the original producer
-	def _get_comp(x):
-		if x == Producer:
-			orig_comp = get_comp_orig(Producer)
-			comp = Mock()
-			comp.__dict__ = orig_comp.__dict__
-			comp.capacity_utilisation = 1.0
-			return comp
-		else:
-			return get_comp_orig(x)
+	session.run(seconds=60)
 
-	lj.get_component = _get_comp
-
-	assert abs(lj.get_component(Producer).capacity_utilisation) > 0.9999
-	icons = lj.get_status_icons()
-	assert len(icons) == 0
+	# Now low
+	assert_called_with_icon(cb, ProductivityLowStatus)
 
 @game_test
 def test_settler_unhappy(session, player):
 	settlement, island = settle(session)
 
+	cb = mock.Mock()
+	session.message_bus.subscribe_globally(AddStatusIcon, cb)
+
 	settler = Build(BUILDINGS.RESIDENTIAL_CLASS, 30, 30, island, settlement=settlement)(player)
 
 	# certainly not unhappy
 	assert settler.happiness > 0.45
-	icons = settler.get_status_icons()
-	assert len(icons) == 0
+	assert not cb.called
 
 	# make it unhappy
 	settler.get_component(StorageComponent).inventory.alter(RES.HAPPINESS_ID, -settler.happiness)
 	assert settler.happiness < 0.1
-	icons = settler.get_status_icons()
-	assert len(icons) == 1
-	assert isinstance(icons[0], SettlerUnhappyStatus)
-
+	assert_called_with_icon(cb, SettlerUnhappyStatus)
 
 
 @game_test
@@ -88,15 +78,14 @@ def test_decommissioned(session, player):
 
 	lj = Build(BUILDINGS.LUMBERJACK_CLASS, 30, 30, island, settlement=settlement)(player)
 
-	icons = lj.get_status_icons()
-	assert not any( isinstance(icon, DecommissionedStatus) for icon in icons )
+	cb = mock.Mock()
+	session.message_bus.subscribe_globally(AddStatusIcon, cb)
 
-	ToggleActive(lj)(player)
+	assert not cb.called
 
-	icons = lj.get_status_icons()
-	assert any( isinstance(icon, DecommissionedStatus) for icon in icons )
+	ToggleActive(lj.get_component(Producer))(player)
 
-
+	assert_called_with_icon(cb, DecommissionedStatus)
 
 @game_test
 def test_inventory_full(session, player):
@@ -104,17 +93,17 @@ def test_inventory_full(session, player):
 
 	lj = Build(BUILDINGS.LUMBERJACK_CLASS, 30, 30, island, settlement=settlement)(player)
 
-	icons = lj.get_status_icons()
-	assert not any( isinstance(icon, InventoryFullStatus) for icon in icons )
+	cb = mock.Mock()
+	session.message_bus.subscribe_globally(AddStatusIcon, cb)
+
+	# Not full
+	assert not cb.called
 
 	inv = lj.get_component(StorageComponent).inventory
 	res = RES.BOARDS_ID
 	inv.alter(res, inv.get_free_space_for( res ) )
 
-	icons = lj.get_status_icons()
-	assert any( isinstance(icon, InventoryFullStatus) for icon in icons )
+	session.run(seconds=1)
 
-
-
-
-
+	# Full
+	assert_called_with_icon(cb, InventoryFullStatus)
