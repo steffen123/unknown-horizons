@@ -58,7 +58,7 @@ class Minimap(object):
 
 
 	WAREHOUSE_IMAGE = "content/gui/icons/resources/16/placeholder.png"
-	GROUND_UNIT_IMAGE = "content/gui/icons/minimap/test.png"
+	GROUND_UNIT_IMAGE = "content/gui/icons/minimap/groundunit.png"
 	SHIP_NEUTRAL_IMAGE = "content/gui/icons/minimap/ship_neutral.png"
 	SHIP_PIRATE_IMAGE = "content/gui/icons/minimap/pirate.png"
 
