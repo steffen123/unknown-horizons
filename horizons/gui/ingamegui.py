@@ -21,6 +21,7 @@
 
 import re
 import horizons.main
+from fife import fife
 
 from horizons.entities import Entities
 from horizons.util import livingProperty, LivingObject, PychanChildFinder
@@ -44,7 +45,8 @@ from horizons.command.game import SpeedDownCommand, SpeedUpCommand
 from horizons.gui.tabs.tabinterface import TabInterface
 from horizons.world.component.namedcomponent import SettlementNameComponent, NamedComponent
 from horizons.world.component.selectablecomponent import SelectableComponent
-from horizons.util.messaging.message import SettlerUpdate, SettlerInhabitantsChanged, ResourceBarResize
+from horizons.util.messaging.message import SettlerUpdate, SettlerInhabitantsChanged, ResourceBarResize, HoverSettlementChanged
+from horizons.util.lastactiveplayersettlementmanager import LastActivePlayerSettlementManager
 
 class IngameGui(LivingObject):
 	"""Class handling all the ingame gui events.
@@ -138,7 +140,7 @@ class IngameGui(LivingObject):
 		self.widgets['tooltip'].hide()
 
 		self.resource_overview = ResourceOverviewBar(self.session)
-		self.session.message_bus.subscribe_globally( ResourceBarResize, self._on_resourcebar_resize )
+		self.session.message_bus.subscribe_globally(ResourceBarResize, self._on_resourcebar_resize)
 
 		# map buildings to build functions calls with their building id.
 		# This is necessary because BuildTabs have no session.
@@ -149,6 +151,7 @@ class IngameGui(LivingObject):
 		# Register for messages
 		self.session.message_bus.subscribe_globally(SettlerUpdate, self._on_settler_level_change)
 		self.session.message_bus.subscribe_globally(SettlerInhabitantsChanged, self._on_settler_inhabitant_change)
+		self.session.message_bus.subscribe_globally(HoverSettlementChanged, self._cityinfo_set)
 
 	def _on_resourcebar_resize(self, message):
 		###
@@ -175,23 +178,28 @@ class IngameGui(LivingObject):
 		self.message_widget = None
 		self.tabwidgets = None
 		self.minimap = None
+		self.resource_overview.end()
+		self.resource_overview = None
 		self.hide_menu()
 		self.session.message_bus.unsubscribe_globally(SettlerUpdate, self._on_settler_level_change)
+		self.session.message_bus.unsubscribe_globally(ResourceBarResize, self._on_resourcebar_resize)
+		self.session.message_bus.unsubscribe_globally(HoverSettlementChanged, self._cityinfo_set)
+		self.session.message_bus.unsubscribe_globally(SettlerInhabitantsChanged, self._on_settler_inhabitant_change)
+
 		super(IngameGui, self).end()
 
-	def cityinfo_set(self, settlement):
+	def _cityinfo_set(self, message):
 		"""Sets the city name at top center of screen.
 
 		Show/Hide is handled automatically
 		To hide cityname, set name to ''
-		@param settlement: Settlement class providing the information needed
+		@param message: HoverSettlementChanged message
 		"""
+		settlement = message.settlement
 		old_was_player_settlement = False
-		if settlement is self.settlement:
-			return
 		if self.settlement is not None:
 			self.settlement.remove_change_listener(self.update_settlement)
-			old_was_player_settlement = self.settlement.owner == self.session.world.player
+			old_was_player_settlement = (self.settlement.owner == self.session.world.player)
 
 		# save reference to new "current" settlement in self.settlement
 		self.settlement = settlement
@@ -230,18 +238,18 @@ class IngameGui(LivingObject):
 		cityinfo = self.widgets['city_info']
 		if self.settlement.owner.is_local_player: # allow name changes
 			cb = Callback(self.show_change_name_dialog, self.settlement)
-			tooltip = _("Click to change the name of your settlement")
+			helptext = _("Click to change the name of your settlement")
 		else: # no name changes
 			cb = lambda : 42
-			tooltip = u""
+			helptext = u""
 		cityinfo.mapEvents({
 			'city_name': cb
 		})
-		cityinfo.findChild(name="city_name").tooltip = tooltip
+		cityinfo.findChild(name="city_name").helptext = helptext
 
 		foundlabel = cityinfo.child_finder('owner_emblem')
 		foundlabel.image = 'content/gui/images/tabwidget/emblems/emblem_%s.png' % (self.settlement.owner.color.name)
-		foundlabel.tooltip = unicode(self.settlement.owner.name)
+		foundlabel.helptext = unicode(self.settlement.owner.name)
 
 		foundlabel = cityinfo.child_finder('city_name')
 		foundlabel.text = unicode(self.settlement.get_component(SettlementNameComponent).name)
@@ -371,7 +379,6 @@ class IngameGui(LivingObject):
 		else:
 			self.show_menu(menu)
 
-
 	def save(self, db):
 		self.message_widget.save(db)
 		self.logbook.save(db)
@@ -381,6 +388,9 @@ class IngameGui(LivingObject):
 		self.message_widget.load(db)
 		self.logbook.load(db)
 		self.resource_overview.load(db)
+
+		cur_settlement = LastActivePlayerSettlementManager().get_current_settlement()
+		self._cityinfo_set( HoverSettlementChanged(self, cur_settlement) )
 
 		self.minimap.draw() # update minimap to new world
 
@@ -398,6 +408,13 @@ class IngameGui(LivingObject):
 		newname = changename.findChild(name='new_name')
 		changename.mapEvents(events)
 		newname.capture(Callback(self.change_name, instance))
+
+		def forward_escape(event):
+			# the textfield will eat everything, even control events
+			if event.getKey().getValue() == fife.Key.ESCAPE:
+				self.main_gui.on_escape()
+		newname.capture( forward_escape, "keyPressed" )
+
 		changename.show()
 		newname.requestFocus()
 
@@ -491,6 +508,12 @@ class IngameGui(LivingObject):
 		self.main_gui.on_escape = self._hide_chat_dialog
 
 		self.widgets['chat'].mapEvents(events)
+		def forward_escape(event):
+			# the textfield will eat everything, even control events
+			if event.getKey().getValue() == fife.Key.ESCAPE:
+				self.main_gui.on_escape()
+
+		self.widgets['chat'].findChild(name='msg').capture( forward_escape, "keyPressed" )
 		self.widgets['chat'].findChild(name='msg').capture( self._do_chat )
 		self.widgets['chat'].show()
 		self.widgets['chat'].findChild(name="msg").requestFocus()

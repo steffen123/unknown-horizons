@@ -19,10 +19,14 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+import json
+from itertools import groupby
+from fife.extensions.pychan.widgets import HBox, Icon, Label
+
 from horizons.util import Callback
 from horizons.util.changelistener import metaChangeListenerDecorator
 from horizons.world.component.ambientsoundcomponent import AmbientSoundComponent
-from horizons.command.game import UnPauseCommand, PauseCommand
+from horizons.command.game import UnPauseCommand
 from horizons.command.misc import Chat
 from horizons.gui.widgets.pickbeltwidget import PickBeltWidget
 
@@ -43,20 +47,26 @@ class LogBook(PickBeltWidget):
 				('chat_overview', _(u'Chat')))
 
 	def __init__(self, session):
+		self.statistics_index = [i for i,sec in enumerate(self.sections) if sec[0] == 'statistics'][0]
 		super(LogBook, self).__init__()
 		self.session = session
-		self._headings = []
-		self._messages = [] # list of all headings / messages
+		self._widgets = [] # list of lists of all widgets added to a logbook page
 		self._cur_entry = None # remember current location; 0 to len(messages)-1
 		self._hiding_widget = False # True if and only if the widget is currently in the process of being hidden
 		self.stats_visible = None
+		self.last_stats_widget = 'players'
+		self.current_page = 0
+		self._init_gui()
 
-		#self.add_entry(u"Heading",u"Welcome to the Captains log") # test code
+#		self.add_captainslog_entry([
+#		  ['Headline', "Heading"],
+#		  ['Image', "content/gui/images/background/hr.png"],
+#		  ['Label', "Welcome to the Captain's log"],
+#		  ['Label', "\n\n"],
+#			]) # test code
 
 	def _init_gui(self):
 		"""Initial gui setup for all subpages accessible through pickbelts."""
-		if hasattr(self,'_gui'):
-			return
 		self._gui = self.get_widget()
 		self._gui.mapEvents({
 		  'okButton' : self.hide,
@@ -74,8 +84,8 @@ class LogBook(PickBeltWidget):
 		self.textfield.capture(self._chatfield_onfocus, 'mouseReleased', 'default')
 		self.chatbox = self._gui.findChild(name="chatbox")
 		self.messagebox = self._gui.findChild(name="game_messagebox")
-		self._display_chat_history() # initially print all loaded messages
-		self._display_message_history()
+		#self._display_chat_history() # initially print all loaded messages
+		#self._display_message_history()
 
 		# these buttons flip pages in the captain's log if there are more than two
 		self.backward_button = self._gui.findChild(name="backwardButton")
@@ -85,33 +95,36 @@ class LogBook(PickBeltWidget):
 	def update_view(self, number=0):
 		""" update_view from PickBeltWidget, cleaning up the logbook subwidgets
 		"""
+		self.current_page = number
 		# self.session might not exist yet during callback setup for pickbelts
 		if hasattr(self, 'session'):
 			self._hide_statswidgets()
+		if self.statistics_index == number:
+			self.show_statswidget(self.last_stats_widget)
 		super(LogBook, self).update_view(number)
 
 	def save(self, db):
-		for i in xrange(0, len(self._headings)):
-			db("INSERT INTO logbook(heading, message) VALUES(?, ?)", \
-			   self._headings[i], self._messages[i])
+		db("INSERT INTO logbook(widgets) VALUES(?)", json.dumps(self._widgets))
 		db("INSERT INTO metadata(name, value) VALUES(?, ?)", \
 		   "logbook_cur_entry", self._cur_entry)
 
 	def load(self, db):
-		for heading, message in db("SELECT heading, message FROM logbook"):
-			# We need unicode strings as the entries are displayed on screen.
-			self.add_entry(unicode(heading, 'utf-8'), unicode(message, 'utf-8'), False)
+		db_data = db("SELECT widgets FROM logbook")
+		widget_list = json.loads(db_data[0][0] if db_data else "[]")
+		for widgets in widget_list:
+			self.add_captainslog_entry(widgets, show_logbook=False)
 		value = db('SELECT value FROM metadata WHERE name = "logbook_cur_entry"')
 		if (value and value[0] and value[0][0]):
-			self._cur_entry = int(value[0][0])
+			self.set_cur_entry(int(value[0][0])) # this also redraws
 
 	def show(self):
 		if not hasattr(self,'_gui'):
 			self._init_gui()
 		if not self.is_visible():
 			self._gui.show()
+			if self.current_page == self.statistics_index:
+				self.show_statswidget(self.last_stats_widget)
 			self.session.ingame_gui.on_switch_main_widget(self)
-			PauseCommand(suggestion=True).execute(self.session)
 
 	def hide(self):
 		if not self._hiding_widget:
@@ -120,7 +133,8 @@ class LogBook(PickBeltWidget):
 			self._hide_statswidgets()
 			self._gui.hide()
 			self._hiding_widget = False
-			UnPauseCommand(suggestion=True).execute(self.session)
+		# Make sure the game is unpaused always and in any case
+		UnPauseCommand(suggestion=False).execute(self.session)
 
 	def is_visible(self):
 		return hasattr(self, '_gui') and self._gui.isVisible()
@@ -133,63 +147,114 @@ class LogBook(PickBeltWidget):
 
 	def _redraw_captainslog(self):
 		"""Redraws gui. Necessary when current message has changed."""
-		texts = [u'', u'']
-		heads = [u'', u'']
-		if len(self._messages) != 0: # there is a current message if there is an entry
-			texts[0] = self._messages[self._cur_entry]
-			heads[0] = self._headings[self._cur_entry]
-			if self._cur_entry+1 < len(self._messages): # maybe also one for the right side?
-				texts[1] = self._messages[self._cur_entry+1]
-				heads[1] = self._headings[self._cur_entry+1]
+		if len(self._widgets) > 0: # there is something to display if this has items
+			self._display_widgets_on_page(self._widgets[self._cur_entry], 'left')
+			if self._cur_entry+1 < len(self._widgets): # check for content on right page
+				self._display_widgets_on_page(self._widgets[self._cur_entry+1], 'right')
+			else:
+				self._display_widgets_on_page([], 'right') # display empty page
 		else:
-			heads[0] = _('Emptiness')
-			texts[0] = "\n\n" + _('There is nothing written in your logbook yet!')
-
+			self._display_widgets_on_page([
+			  ['Headline', _("Emptiness")],
+			  ['Image', "content/gui/images/background/hr.png"],
+			  ['Label', "\n\n"],
+			  ['Label', _('There is nothing written in your logbook yet!')],
+				], 'left')
 		self.backward_button.set_active()
 		self.forward_button.set_active()
-
-		if len(self._messages) == 0 or self._cur_entry == 0:
+		if len(self._widgets) == 0 or self._cur_entry == 0:
 			self.backward_button.set_inactive()
-		if len(self._messages) == 0 or self._cur_entry == len(self._messages) - 2:
+		if len(self._widgets) == 0 or self._cur_entry >= len(self._widgets) - 2:
 			self.forward_button.set_inactive()
-
-		self._gui.findChild(name="head_left").text = heads[0]
-		self._gui.findChild(name="lbl_left").text = texts[0]
-		self._gui.findChild(name="head_right").text = heads[1]
-		self._gui.findChild(name="lbl_right").text = texts[1]
 		self._gui.adaptLayout()
 
 ########
 #        LOGBOOK  SUBWIDGET
 ########
 
-	def add_entry(self, heading, message, show_logbook=True):
-		"""Adds an entry to the logbook consisting of:
-		@param heading: printed in top line.
-		@param message: printed below heading, wraps. """
-		#TODO last line of message text sometimes get eaten. Ticket #535
-		heading = unicode(heading)
-		message = unicode(message)
-		self._headings.append(heading)
-		self._messages.append(message)
-		if len(self._messages) % 2 == 1:
-			self._cur_entry = len(self._messages) - 1
+	def parse_logbook_item(self, widget):
+		# json.loads() returns unicode, thus convert strings and compare to unicode
+		# Image works with str() since pychan can only use str objects as file path
+		if widget and widget[0]: # allow empty Labels
+			widget_type = unicode(widget[0])
+		if isinstance(widget, basestring):
+			add = Label(text=unicode(widget), wrap_text=True, max_size=(340,508))
+		elif widget_type == u'Label':
+			add = Label(text=unicode(widget[1]), wrap_text=True, max_size=(340,508))
+		elif widget_type == u'Image':
+			add = Icon(image=str(widget[1]))
+		elif widget_type == u'Gallery':
+			add = HBox()
+			for image in widget[1]:
+				add.addChild(Icon(image=str(image)))
+		elif widget_type == u'Headline':
+			add = Label(text=unicode(widget[1]))
+			add.stylize('headline')
 		else:
-			self._cur_entry = len(self._messages) - 2
-		if show_logbook:
+			print '[WW] Warning: Unknown widget type {typ} in widget {wdg}'.format(
+				typ=widget[0], wdg=widget)
+			add = None
+		return add
+
+	def _display_widgets_on_page(self, widgets, page):
+		"""
+		@param widgets: widget list, cf. docstring of add_captainslog_entry
+		@param page: 'left' or 'right'
+		"""
+		widgetbox = self._gui.findChild(name="custom_widgets_{page}".format(page=page))
+		widgetbox.removeAllChildren()
+		for widget_definition in widgets:
+			add = self.parse_logbook_item(widget_definition)
+			if add is not None:
+				widgetbox.addChild(add)
+
+	def add_captainslog_entry(self, widgets, show_logbook=True):
+		"""Adds an entry to the logbook VBoxes consisting of a widget list.
+		Check e.g. content/scenarios/tutorial_en.yaml for real-life usage.
+
+		@param widgets: Each item in here is a list like the following:
+		[Label, "Awesome text to be displayed as a label"]
+		"Shortcut notation for a Label"
+		[Headline, "Label to be styled as headline (in small caps)"]
+		[Image, "content/gui/images/path/to/the/file.png"]
+		[Gallery, ["/path/1.png", "/path/file.png", "/file/3.png"]]
+		[Pagebreak]  <==  not implemented yet
+		"""
+		#TODO last line of message text sometimes get eaten. Ticket #535
+		def _split_on_pagebreaks(widgets):
+			"""This black magic splits the widget list on each ['Pagebreak']
+			>> [['a','a'], ['b','b'], ['Pagebreak'], ['c','c'], ['d','d']]
+			>>>> into [[['a', 'a'], ['b', 'b']], [['c', 'c'], ['d', 'd']]]
+			#TODO n successive pagebreaks should insert (n-1) blank pages (currently 0 are inserted)
+			"""
+			return [list(l[1]) for l in groupby(widgets, lambda x: x != ['Pagebreak']) if l[0]]
+
+		for widget_list in _split_on_pagebreaks(widgets):
+			self._widgets.append(widget_list)
+			for widget_definition in widget_list:
+				self.parse_logbook_item(widget_definition)
+		# if a new entry contains more than one page, we want to display the first
+		# unread message. note that len(widgets) starts at 1 and _cur_entry at 0.
+		# position always refers to the left page, so only multiples of 2 are valid
+		len_old = len(self._widgets) - len(_split_on_pagebreaks(widgets))
+		if len_old % 2 == 1: # uneven amount => empty last page, space for 1 new
+			self._cur_entry = len_old - 1
+		else: # even amount => all pages filled. we could display two new messages
+			self._cur_entry = len_old
+		if show_logbook and hasattr(self, "_gui"):
 			self._redraw_captainslog()
+			self.show()
 
 	def clear(self):
 		"""Remove all entries"""
-		self._headings = []
-		self._messages = []
+		self._widgets = []
 		self._cur_entry = None
 
 	def get_cur_entry(self):
 		return self._cur_entry
 
 	def set_cur_entry(self, cur_entry):
-		if cur_entry < 0 or cur_entry >= len(self._messages):
+		if cur_entry < 0 or cur_entry >= len(self._widgets):
 			raise ValueError
 		self._cur_entry = cur_entry
 		self._redraw_captainslog()
@@ -197,11 +262,10 @@ class LogBook(PickBeltWidget):
 	def _scroll(self, direction):
 		"""Scroll back or forth one message.
 		@param direction: -1 or 1"""
-		if len(self._messages) == 0:
+		if len(self._widgets) == 0:
 			return
-		#assert direction in (-1, 1)
 		new_cur = self._cur_entry + direction
-		if new_cur < 0 or new_cur >= len(self._messages):
+		if new_cur < 0 or new_cur >= len(self._widgets):
 			return # invalid scroll
 		self._cur_entry = new_cur
 		AmbientSoundComponent.play_special('flippage')
@@ -212,6 +276,8 @@ class LogBook(PickBeltWidget):
 ########
 #
 #TODO list:
+#  [ ] Extract this stuff to extra widget class that properly handles all the
+#      hide and save calls
 #  [ ] fix stats show/hide mess: how is update_view called before self.__init__
 #  [ ] save last shown stats widget and re-show it when clicking on Statistics
 #  [ ] semantic distinction between general widget and subwidgets (log, stats)
@@ -220,12 +286,13 @@ class LogBook(PickBeltWidget):
 
 	def show_statswidget(self, widget='players'):
 		"""Shows logbook with Statistics page selected"""
-		logbook_index = [i for i,sec in enumerate(self.sections) if sec[0] == 'statistics'][0]
-		self.update_view(logbook_index)
+		if self.current_page != self.statistics_index:
+			self.update_view(self.statistics_index)
 		self._hide_statswidgets()
 		if widget:
 			getattr(self, '_show_{widget}'.format(widget=widget))()
 			self.stats_visible = widget
+			self.last_stats_widget = widget
 
 	def toggle_stats_visibility(self, widget='players'):
 		"""
@@ -278,25 +345,29 @@ class LogBook(PickBeltWidget):
 		if msg:
 			Chat(msg).execute(self.session)
 			self.textfield.text = u''
-		self._display_chat_history()
 		self._display_message_history()
+		self._display_chat_history()
 
 	def _display_message_history(self):
 		self.messagebox.items = []
 		messages = self.session.ingame_gui.message_widget.active_messages + \
 		           self.session.ingame_gui.message_widget.archive
-		for msg in sorted(messages,	key=lambda m: m.created):
+		for msg in sorted(messages, key=lambda m: m.created):
 			if msg.id != 'CHAT': # those get displayed in the chat window instead
-				self.messagebox.items.append(msg.message)
+				m = msg.message
+				if not isinstance(m, unicode):
+					m = m.decode('utf-8')
+				self.messagebox.items.append(m)
 		self.messagebox.selected = len(self.messagebox.items) - 1 # scroll to bottom
 
 	def _display_chat_history(self):
 		self.chatbox.items = []
-		for msg in sorted(self.session.ingame_gui.message_widget.chat, key=lambda m: m.created):
-			self.chatbox.items.append(msg.message)
+		messages = self.session.ingame_gui.message_widget.chat
+		for msg in sorted(messages, key=lambda m: m.created):
+			self.chatbox.items.append(unicode(msg.message))
 		self.chatbox.selected = len(self.chatbox.items) - 1 # scroll to bottom
 
 	def _chatfield_onfocus(self):
 		"""Removes text in chat input field when it gets focused."""
-		self.textfield.text = u""
+		self.textfield.text = u''
 		self.textfield.capture(None, 'mouseReleased', 'default')

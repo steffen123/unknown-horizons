@@ -25,8 +25,6 @@ from fife.extensions import pychan
 import horizons.main
 
 from horizons.extscheduler import ExtScheduler
-from fife.extensions.pychan.widgets.common import UnicodeAttr
-from horizons.gui.widgets import ProgressBar
 from horizons.util.gui import load_uh_widget
 
 class _Tooltip(object):
@@ -35,10 +33,8 @@ class _Tooltip(object):
 	SIZE_BG_TOP = 17 # height of the image tooltip_bg_top.png
 	SIZE_BG_BOTTOM = 17 # height of the image tooltip_bg_bottom.png
 	CHARS_PER_LINE = 19 # character count after which we start new line. no wrap
-	def init_tooltip(self, tooltip):
-		self.gui = load_uh_widget('tooltip.xml')
-		self.gui.hide()
-		self.tooltip = tooltip
+	def init_tooltip(self):
+		self.gui = None
 		self.mapEvents({
 			self.name + '/mouseEntered' : self.position_tooltip,
 			self.name + '/mouseExited' : self.hide_tooltip,
@@ -58,6 +54,9 @@ class _Tooltip(object):
 				i()
 		if (event.getButton() == fife.MouseEvent.MIDDLE):
 			return
+
+		if self.gui is None:
+			self.gui = load_uh_widget('tooltip.xml')
 		widget_position = self.getAbsolutePos()
 		screen_width = horizons.main.fife.engine_settings.getScreenWidth()
 		self.gui.y = widget_position[1] + event.getY() + 5
@@ -72,10 +71,14 @@ class _Tooltip(object):
 			self.gui.show()
 
 	def show_tooltip(self):
-		if self.tooltip not in ("", None):
+		if self.helptext not in ("", None):
 			# recreate full tooltip since new text needs to be relayouted
-			self.gui.removeAllChildren()
-			translated_tooltip = _(self.tooltip)
+
+			if self.gui is None:
+				self.gui = load_uh_widget('tooltip.xml')
+			else:
+				self.gui.removeAllChildren()
+			translated_tooltip = _(self.helptext)
 			#HACK this looks better than splitting into several lines & joining
 			# them. works because replace_whitespace in fill defaults to True:
 			replaced = translated_tooltip.replace(r'\n', self.CHARS_PER_LINE*' ')
@@ -107,9 +110,10 @@ class _Tooltip(object):
 		if (event is None or event.getType() == fife.MouseEvent.EXITED):
 			for i in self._exited_callbacks:
 				i()
-		self.gui.hide()
+		if self.gui is not None:
+			self.gui.hide()
+			self.gui.removeAllChildren()
 		ExtScheduler().rem_call(self, self.show_tooltip)
-		self.gui.removeAllChildren()
 		self.tooltip_shown = False
 
 	def add_entered_callback(self, cb):
@@ -118,55 +122,13 @@ class _Tooltip(object):
 		# from what my other solution to this problem would have looked like
 		self._entered_callbacks.append(cb)
 
+	def clear_entered_callbacks(self):
+		self._entered_callbacks = []
+
 	def add_exited_callback(self, cb):
 		"""Add a callback to always be called when the mouse exits the button (not the tooltip)"""
 		self._exited_callbacks.append(cb)
 
+	def clear_exited_callbacks(self):
+		self._exited_callbacks = []
 
-class TooltipIcon(_Tooltip, pychan.widgets.Icon):
-	"""The TooltipIcon is a modified icon widget. It can be used in xml files like this:
-	<TooltipIcon tooltip=""/>
-	Used to display tooltip on hover on icons.
-	Attributes same as Icon widget with addition of tooltip="text string to display".
-	Use '\n' to force newline.
-	"""
-	ATTRIBUTES = pychan.widgets.Icon.ATTRIBUTES + [UnicodeAttr('tooltip')]
-	def __init__(self, tooltip = "", **kwargs):
-		super(TooltipIcon, self).__init__(**kwargs)
-		self.init_tooltip(tooltip)
-
-class TooltipButton(_Tooltip, pychan.widgets.ImageButton):
-	"""The TooltipButton is a modified image button widget. It can be used in xml files like this:
-	<TooltipButton tooltip=""/>
-	Used to display tooltip on hover on buttons.
-	Attributes same as ImageButton widget with addition of tooltip="text string to display".
-	Use '\n' to force newline.
-	"""
-	ATTRIBUTES = pychan.widgets.ImageButton.ATTRIBUTES + [UnicodeAttr('tooltip')]
-	def __init__(self, tooltip = "", **kwargs):
-		super(TooltipButton, self).__init__(**kwargs)
-		self.init_tooltip(tooltip)
-
-class TooltipLabel(_Tooltip, pychan.widgets.Label):
-	"""The TooltipButton is a modified label widget. It can be used in xml files like this:
-	<TooltipLabel tooltip=""/>
-	Used to display tooltip on hover on buttons.
-	Attributes same as Label widget with addition of tooltip="text string to display".
-	Use '\n' to force newline.
-	"""
-	ATTRIBUTES = pychan.widgets.Label.ATTRIBUTES + [UnicodeAttr('tooltip')]
-	def __init__(self, tooltip="", **kwargs):
-		super(TooltipLabel, self).__init__(**kwargs)
-		self.init_tooltip(tooltip)
-
-class TooltipProgressBar(_Tooltip, ProgressBar):
-	"""The TooltipProgressBar is a modified progress bar widget. It can be used in xml files like this:
-	<TooltipProgressbar tooltip=""/>
-	Used to display tooltip on hover on buttons.
-	Attributes same as Label widget with addition of tooltip="text string to display".
-	Use '\n' to force newline.
-	"""
-	ATTRIBUTES = pychan.widgets.Label.ATTRIBUTES + [UnicodeAttr('tooltip')]
-	def __init__(self, tooltip="", **kwargs):
-		super(TooltipProgressBar, self).__init__(**kwargs)
-		self.init_tooltip(tooltip)

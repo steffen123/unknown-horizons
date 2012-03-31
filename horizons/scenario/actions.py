@@ -66,22 +66,19 @@ def show_db_message(session, message_id):
 	session.ingame_gui.message_widget.add(None, None, message_id)
 
 @register(name='logbook_w')
-def write_logbook_entry(session, head, message):
-	"""Silently adds an entry to the logbook."""
-	msg = message + '\n'* 30 + 'UHtutorial' # this can get removed once ticket 535 is resolved
-	session.ingame_gui.logbook.add_entry(unicode(head),unicode(msg))
-
-def show_logbook_entry(session, head, message):
+def write_logbook_entry(session, widgets):
 	"""Adds an entry to the logbook and displays it."""
-	write_logbook_entry(session, head, message)
-	session.ingame_gui.logbook.show()
+	session.ingame_gui.logbook.add_captainslog_entry(widgets, show_logbook=True)
 
 @register(name='logbook')
-def show_logbook_entry_delayed(session, head, message, delay=MESSAGES.LOGBOOK_DEFAULT_DELAY):
+def show_logbook_entry_delayed(session, *widgets):
 	"""Show a logbook entry delayed by delay seconds.
-	
-	Set delay=0 for instant apperaring."""
-	callback = Callback(show_logbook_entry, session, head, message)
+
+	Set delay=0 for instant appearing.
+	#TODO get *delay* parameter working again
+	"""
+	delay = MESSAGES.LOGBOOK_DEFAULT_DELAY
+	callback = Callback(write_logbook_entry, session, widgets)
 	Scheduler().add_new_object(callback, session.scenario_eventhandler, run_in=Scheduler().get_ticks(delay))
 
 @register(name='win')
@@ -111,14 +108,15 @@ def goal_reached(session, goal_number):
 	"""Called when player reached a goal in a scenario"""
 	# TODO : if we want, we could make this work in "scenario" mode
 	#        to allow the player to reach goals in scenarios even if
-	#        he didn't load the campaign.
+	#        no campaign was has been loaded.
 	if session.campaign:
 		SavegameManager.mark_goal_reached(session.campaign, goal_number)
 
 @register(name='lose')
 def do_lose(session):
 	"""Called when player lost"""
-	show_message(session, 'You failed the scenario.')
+	show_db_message(session, 'YOU_LOST')
+	#TODO rename this file to 'lose.ogg'
 	horizons.main.fife.play_sound('effects', 'content/audio/sounds/events/scenario/loose.ogg')
 	# drop events after this event
 	Scheduler().add_new_object(session.scenario_eventhandler.drop_events, session.scenario_eventhandler)
@@ -126,8 +124,12 @@ def do_lose(session):
 @register()
 def set_var(session, name, value):
 	session.scenario_eventhandler._scenario_variables[name] = value
-	check_callback = Callback(session.scenario_eventhandler.check_events, CONDITIONS.var_eq)
-	Scheduler().add_new_object(check_callback, session.scenario_eventhandler)
+	check_callbacks = Callback.ChainedCallbacks(
+	  Callback(session.scenario_eventhandler.check_events, CONDITIONS.var_eq),
+	  Callback(session.scenario_eventhandler.check_events, CONDITIONS.var_lt),
+	  Callback(session.scenario_eventhandler.check_events, CONDITIONS.var_gt)
+	)
+	Scheduler().add_new_object(check_callbacks, session.scenario_eventhandler, run_in=0)
 
 @register()
 def wait(session, time):

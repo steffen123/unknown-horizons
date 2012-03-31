@@ -165,9 +165,6 @@ class Producer(Component):
 			assert isinstance(production, Production)
 			production.load(db, worldid)
 			self.add_production(production)
-			# Listener has been removed in the productions.load(), because the
-			# changelistener's load is called
-			production.add_change_listener(self._on_production_change, call_listener_now=False)
 
 	def save(self, db):
 		super(Producer, self).save(db)
@@ -188,7 +185,11 @@ class Producer(Component):
 			self.log.debug('%s: added production line %s is active', self, production.get_production_line_id())
 			self._productions[production.get_production_line_id()] = production
 		production.add_production_finished_listener(self._production_finished)
-		# this would be called multiple times during init, just add it later this tick.
+		# This would be called multiple times during init, just add it later this tick.
+		# It also ensures that the changelistener would stick, we used to readd
+		# the listener in load(), which was explained by this comment:
+			# Listener has been removed in the productions.load(), because the
+			# changelistener's load is called
 		Scheduler().add_new_object(
 		  Callback(production.add_change_listener, self._on_production_change, call_listener_now=True), self, run_in=0
 		)
@@ -349,7 +350,7 @@ class Producer(Component):
 				affected_res = set() # find them:
 				for prod in self.get_productions():
 					affected_res = affected_res.union( prod.get_unstorable_produced_res() )
-				self._producer_status_icon = InventoryFullStatus(affected_res, self.instance)
+				self._producer_status_icon = InventoryFullStatus(self.instance, affected_res)
 				self.session.message_bus.broadcast(AddStatusIcon(self, self._producer_status_icon))
 
 			if not full and hasattr(self, "_producer_status_icon"):
@@ -548,11 +549,12 @@ class UnitProducer(QueueProducer):
 							if self.instance.island.get_tile(point) is None:
 								tile = self.session.world.get_tile(point)
 								if tile is not None and tile.is_water and coord not in self.session.world.ship_map:
+									found_tile = True
 									# execute bypassing the manager, it's simulated on every machine
 									CreateUnit(self.instance.owner.worldid, unit, point.x, point.y)(issuer=self.instance.owner)
-									# Fire a message indicating that the ship has been created
-									self.session.ingame_gui.message_widget.add(None, None, 'NEW_UNIT')
-									found_tile = True
+									if self.instance.owner.is_local_player:
+										# Fire a message indicating that the ship has been created
+										self.session.ingame_gui.message_widget.add(point.x, point.y, 'NEW_UNIT')
 									break
 						radius += 1
 

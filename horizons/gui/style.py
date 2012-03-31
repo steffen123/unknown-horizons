@@ -26,10 +26,10 @@ STYLES = {
 		'default' : {
 			'border_size': 0,
 			'margins': (0, 0),
-			'base_color' : fife.Color(40, 40, 40, 0),
-			'foreground_color' : fife.Color(255, 255, 255),
-			'background_color' : fife.Color(40, 40, 40, 255),
-			'selection_color' : fife.Color(80, 80, 80, 255),
+			'base_color' : fife.Color(40, 40, 40,   0),
+			'foreground_color' : fife.Color( 80, 80, 40,   0),
+			'background_color' : fife.Color(255,255,255, 128),
+			'selection_color' : fife.Color(80,80,40, 192),
 			'font' : '14_black',
 		},
 		'Button' : {
@@ -44,9 +44,9 @@ STYLES = {
 		},
 		('CheckBox','DropDown') : {
 			'selection_color' : fife.Color(255,255,255,200),
-			'background_color' : fife.Color(255,255,255,128),
-			'base_color' : fife.Color(0,0,0,0),
+			'background_color' : fife.Color(255,255,255,64),
 			'foreground_color' : fife.Color(80,80,40),
+			'base_color' : fife.Color(0,0,0,0),
 			'font' : '14_black',
 			'border_size': 0,
 		},
@@ -75,9 +75,8 @@ STYLES = {
 		},
 		'RadioButton' : {
 			'border_size': 0,
-			'background_color' : fife.Color(0, 0, 0, 0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'border_size': 0,
 			'background_color' : fife.Color(40, 40, 40, 0),
 			'font' : '14_black',
@@ -109,7 +108,7 @@ STYLES = {
 			'border_size': 0,
 			'margins' : (10, 5)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'border_size': 0,
 			'font' : 'mainmenu',
 			'background_color' : fife.Color(0, 0, 0, 102)
@@ -131,12 +130,16 @@ STYLES = {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'margins': (0,0),
 			'font' : '14_black'
 		},
 		# NOTE: This is a hack to add padding attributs to boxes of this style
 		('Container','HBox','VBox') : {
+		},
+		# once more, better not ask why this is necessary (#1607)
+		# also seems it won't work if just added to the above.
+		'CheckBox' : {
 		},
 },
 
@@ -155,7 +158,7 @@ STYLES = {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'alpha':0,
 			'font' : 'small_black'
 		}
@@ -176,7 +179,7 @@ STYLES = {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'margins': (0,0),
 			'font' : 'small'
 		}
@@ -198,7 +201,7 @@ STYLES = {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : '18'
 		}
 },
@@ -218,7 +221,7 @@ STYLES = {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : 'headline'
 		},
 		# NOTE: This is a hack to add padding attributs to boxes of this style
@@ -233,12 +236,12 @@ STYLES = {
 			'font' : '14_black',
 			'foreground_color' : fife.Color(80,80,40),
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : '14_black',
 		},
-		'CheckBox' : {
+		('CheckBox', 'RadioButton') : {
 			'selection_color' : fife.Color(255,255,255,200),
-			'background_color' : fife.Color(255,255,255,128),
+			'background_color' : fife.Color(255,255,255,64),
 			'base_color' : fife.Color(0,0,0,0),
 			'foreground_color' : fife.Color(80,80,40),
 		},
@@ -286,7 +289,7 @@ STYLES = {
 	    'default' : {
 			'font' : '14_black',
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : '14_black',
 		},
 		'ListBox' : {
@@ -320,7 +323,7 @@ STYLES = {
 			'border_size': 0,
 			'margins' : (0,0)
 		},
-		('Label','TooltipLabel') : {
+		'Label' : {
 			'font' : 'tooltip'
 		}
 	},

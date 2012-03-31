@@ -23,8 +23,9 @@ import horizons.main
 
 from fife import fife
 from horizons.world.status import StatusIcon
+from horizons.constants import LAYERS
 
-from horizons.util.messaging.message import AddStatusIcon, RemoveStatusIcon, RemoveAllStatusIcons
+from horizons.util.messaging.message import AddStatusIcon, RemoveStatusIcon, WorldObjectDeleted
 
 class StatusIconManager(object):
 	"""Manager class that manages all status icons. It listenes to AddStatusIcon
@@ -39,7 +40,7 @@ class StatusIconManager(object):
 
 		self.session.message_bus.subscribe_globally(AddStatusIcon, self.on_add_icon_message)
 		self.session.message_bus.subscribe_globally(RemoveStatusIcon, self.on_remove_icon_message)
-		self.session.message_bus.subscribe_globally(RemoveAllStatusIcons, self.on_remove_all_message)
+		self.session.message_bus.subscribe_globally(WorldObjectDeleted, self.on_worldobject_deleted_message)
 
 	def on_add_icon_message(self, message):
 		"""This is called by the message bus with AddStatusIcon messages"""
@@ -50,15 +51,15 @@ class StatusIconManager(object):
 		assert not message.icon in self.icons[icon_instance]
 		self.icons[icon_instance].append(message.icon)
 		# Sort, make sure highest icon is at top
-		self.icons[icon_instance] = sorted(self.icons[icon_instance], key=StatusIcon.get_sorting_key())
+		self.icons[icon_instance] = sorted(self.icons[icon_instance], key=StatusIcon.get_sorting_key(), reverse=True)
 		# Now render the most important one
 		self.__render_status(icon_instance, self.icons[icon_instance][0])
 
-	def on_remove_all_message(self, message):
-		assert isinstance(message, RemoveAllStatusIcons)
-		if message.instance in self.icons:
-			self.renderer.removeAll(self.get_status_string(message.instance))
-			del self.icons[message.instance]
+	def on_worldobject_deleted_message(self, message):
+		assert isinstance(message, WorldObjectDeleted)
+		if message.worldobject in self.icons:
+			self.renderer.removeAll(self.get_status_string(message.worldobject))
+			del self.icons[message.worldobject]
 
 	def on_remove_icon_message(self, message):
 		"""Called by the MessageBus with RemoveStatusIcon messages."""
@@ -83,9 +84,23 @@ class StatusIconManager(object):
 		# Clean icons
 		self.renderer.removeAll(status_string)
 
-		rel = fife.Point(8, -8) # TODO: find suitable place within instance
-		# NOTE: rel is interpreted as pixel offset on screen
-		node = fife.RendererNode(instance.fife_instance, rel)
+		# pixel-offset on screen (will be constant across zoom-levels)
+		rel = fife.Point(0, -30)
+
+		layer = self.session.view.layers[LAYERS.OBJECTS]
+
+		pos = instance.position
+
+		# trial and error has brought me to this (it's supposed to hit the center)
+		loc = fife.Location(layer)
+		loc.setExactLayerCoordinates(
+		  fife.ExactModelCoordinate(
+		    pos.origin.x + float(pos.width) / 4,
+		    pos.origin.y + float(pos.height) / 4,
+		  )
+		)
+
+		node = fife.RendererNode(loc, rel)
 
 		try: # to load an animation
 			anim = horizons.main.fife.animationloader.loadResource(status.icon)

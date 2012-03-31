@@ -29,6 +29,8 @@ from horizons.extscheduler import ExtScheduler
 from horizons.util.python.decorators import bind_all
 from horizons.command.unit import Act
 from horizons.world.component.namedcomponent import NamedComponent
+from horizons.world.units.ship import Ship
+from horizons.world.units.groundunit import GroundUnit
 
 import math
 from math import sin, cos
@@ -49,15 +51,16 @@ class Minimap(object):
 	** Handle clicks, remove overlay icon
 	"""
 	COLORS = { "island": (137, 117,  87),
-				     "cam":    (  1,   1,   1),
-	           "water" : (198, 188, 165),
-	           "highlight" : (255, 0, 0), # for events
-	           }
+		"cam":    (  1,   1,   1),
+		"water" : (198, 188, 165),
+		"highlight" : (255, 0, 0), # for events
+		}
 
 
 	WAREHOUSE_IMAGE = "content/gui/icons/resources/16/placeholder.png"
-	SHIP_IMAGE = "content/gui/icons/minimap/ship.png"
-	GROUND_UNIT_IMAGE = "content/gui/icons/minimap/ship.png"
+	GROUND_UNIT_IMAGE = "content/gui/icons/minimap/test.png"
+	SHIP_NEUTRAL_IMAGE = "content/gui/icons/minimap/ship_neutral.png"
+	SHIP_PIRATE_IMAGE = "content/gui/icons/minimap/pirate.png"
 
 	SHIP_DOT_UPDATE_INTERVAL = 0.5 # seconds
 
@@ -121,7 +124,7 @@ class Minimap(object):
 		self._image_size_cache = {} # internal detail
 
 		self.imagemanager = imagemanager
-
+		
 		self.minimap_image = _MinimapImage(self, targetrenderer)
 
 		#import random
@@ -339,7 +342,7 @@ class Minimap(object):
 	def _show_tooltip(self, event):
 		if hasattr(self, "icon"): # only supported for icon mode atm
 			if self.fixed_tooltip != None:
-				self.icon.tooltip = self.fixed_tooltip
+				self.icon.helptext = self.fixed_tooltip
 				self.icon.position_tooltip(event)
 				#self.icon.show_tooltip()
 			else:
@@ -350,13 +353,14 @@ class Minimap(object):
 
 				tile = self.world.get_tile( Point(*coords) )
 				if tile is not None and tile.settlement is not None:
-					new_tooltip = unicode(tile.settlement.get_component(NamedComponent).name)
-					if self.icon.tooltip != new_tooltip:
-						self.icon.tooltip = new_tooltip
+					new_helptext = unicode(tile.settlement.get_component(NamedComponent).name)
+					if self.icon.helptext != new_helptext:
+						self.icon.helptext = new_helptext
 						self.icon.show_tooltip()
 					else:
 						self.icon.position_tooltip(event)
 				else:
+					# mouse not over relevant part of the minimap
 					self.icon.hide_tooltip()
 
 	def highlight(self, tup, factor=1.0, speed=1.0, finish_callback=None, color=(0,0,0)):
@@ -542,36 +546,99 @@ class Minimap(object):
 
 	def _timed_update(self, force=False):
 		"""Regular updates for domains we can't or don't want to keep track of."""
+
 		# update ship dots
 		# OPTIMISATION NOTE: there can be pretty many ships, don't rely on the inner loop being rarely executed
+		#TODO: Add groundunits again to minimap
+		#self.minimap_image.set_drawing_enabled()
+		#render_name = self._get_render_name("unit")
+		#self.minimap_image.rendertarget.removeAll( render_name )
+		#use_rotation = self._get_rotation_setting()
+		#switch_image = object()
+		#unit_image = self.__class__.SHIP_IMAGE
+		#for unit in itertools.chain(self.world.ship_map.itervalues(), [switch_image], self.world.ground_unit_map.itervalues()):
+		#	if unit is switch_image:
+		#		unit_image = self.__class__.GROUND_UNIT_IMAGE
+		#		continue
+		#		
+		#	coord = self._world_to_minimap( unit().position.to_tuple(), use_rotation )
+		#	color = unit().owner.color.to_tuple()
+		#	# TODO: apply color
+		#	
+		#	self._update_image( unit_image, render_name, coord)
+
+		# OPTIMISATION NOTE: there can be pretty many ships, don't rely on the loop being rarely executed
+		# update ship icons
 		self.minimap_image.set_drawing_enabled()
 		render_name = self._get_render_name("unit")
 		self.minimap_image.rendertarget.removeAll( render_name )
 		use_rotation = self._get_rotation_setting()
-		switch_image = object()
-		unit_image = self.__class__.SHIP_IMAGE
-		for unit in itertools.chain(self.world.ship_map.itervalues(), [switch_image], self.world.ground_unit_map.itervalues()):
-			if unit is switch_image:
-				unit_image = self.__class__.GROUND_UNIT_IMAGE
+		# make use of this dummy points instead of creating a fife.point instances which are consuming a lot of resources
+		dummy_point0 = fife.Point(0,0)
+		dummy_point1 = fife.Point(0,0)
+		dummy_point2 = fife.Point(0,0)
+		dummy_point3 = fife.Point(0,0)
+		for unit in itertools.chain(self.world.ship_map.itervalues(), self.world.ground_unit_map.itervalues()):
+			if not unit():
 				continue
-				
 			coord = self._world_to_minimap( unit().position.to_tuple(), use_rotation )
 			color = unit().owner.color.to_tuple()
-			# TODO: apply color
-			
-			self._update_image( unit_image, render_name, coord)
+			dummy_point1.set(coord[0], coord[1])
+			# set correct icon
+			if isinstance(unit(), Ship):
+				if unit().owner is self.session.world.pirate:
+					unit_icon_path = self.__class__.SHIP_PIRATE_IMAGE
+				else: 	
+					unit_icon_path = self.__class__.SHIP_NEUTRAL_IMAGE
+				unit_icon = self.imagemanager.load(unit_icon_path)
+				self.minimap_image.rendertarget.addImage(render_name, dummy_point1, unit_icon)
+				if unit().owner.regular_player is True:
+					# add the 'flag' over the ship icon, with the color of the owner
+					dummy_point0.set(coord[0] - 5, coord[1] - 5)
+					dummy_point1.set(coord[0], coord[1] - 5)
+					self.minimap_image.rendertarget.addLine(render_name, dummy_point0,
+									dummy_point1, color[0], color[1], color[2])
+					dummy_point0.set(coord[0] - 6, coord[1] - 6)
+					dummy_point1.set(coord[0], coord[1] - 6)
+					self.minimap_image.rendertarget.addLine(render_name, dummy_point0,
+									dummy_point1, color[0], color[1], color[2])
+					dummy_point0.set(coord[0] - 4, coord[1] - 4)
+					dummy_point1.set(coord[0], coord[1] - 4)
+					self.minimap_image.rendertarget.addLine(render_name, dummy_point0,
+									dummy_point1, color[0], color[1], color[2])
+					# add black border around the flag
+					dummy_point0.set(coord[0] - 6, coord[1] - 7)
+					dummy_point1.set(coord[0], coord[1] - 7)
+					self.minimap_image.rendertarget.addLine(render_name, dummy_point0, dummy_point1, 0, 0, 0)
+					dummy_point0.set(coord[0] - 4, coord[1] - 3)
+					dummy_point1.set(coord[0], coord[1] - 4)
+					self.minimap_image.rendertarget.addLine(render_name, dummy_point0, dummy_point1, 0, 0, 0)
+					dummy_point0.set(coord[0] - 6, coord[1] - 7)
+					dummy_point1.set(coord[0] - 4, coord[1] - 3)
+					self.minimap_image.rendertarget.addLine(render_name, dummy_point0, dummy_point1, 0, 0, 0)
+			if isinstance(unit(), GroundUnit):
+				dummy_point0.set(coord[0], coord[1])
+				unit_icon_path = self.__class__.GROUND_UNIT_IMAGE
+				unit_icon = self.imagemanager.load(unit_icon_path)
+				self.minimap_image.rendertarget.addImage(render_name, dummy_point0, unit_icon)
+				# TODO: add complete banner + black border
+				dummy_point0.set(coord[0] - 2, coord[1] + 3)
+				dummy_point1.set(coord[0] + 2, coord[1] + 3)
+				dummy_point2.set(coord[0] + 2, coord[1] - 3)
+				dummy_point3.set(coord[0] - 2, coord[1] - 3)
+				self.minimap_image.rendertarget.addQuad(render_name, dummy_point0,
+									dummy_point1, dummy_point2,
+									dummy_point3, color[0], color[1], color[2])
 			# TODO: nicer selected view
-			if unit in self.session.selected_instances:
-				self.minimap_image.rendertarget.addPoint(render_name,
-					                                     fife.Point( coord[0], coord[1] ),
-					                                     *Minimap.COLORS["water"])
+			if unit() in self.session.selected_instances:
+				dummy_point0.set(coord[0], coord[1])
+				self.minimap_image.rendertarget.addPoint(render_name, dummy_point0, *Minimap.COLORS["water"])
 				for x_off, y_off in ((-2,  0),
-					                   (+2,  0),
+							   (+2,  0),
 					                   ( 0, -2),
 					                   ( 0, +2)):
-					self.minimap_image.rendertarget.addPoint(render_name,
-						                                       fife.Point( coord[0]+x_off, coord[1] + y_off ),
-						                                       *color)
+					dummy_point1.set(coord[0]+x_off, coord[1] + y_off)
+					self.minimap_image.rendertarget.addPoint(render_name, dummy_point1, *color)
 
 		# draw settlement warehouses if something has changed
 		settlements = self.world.settlements

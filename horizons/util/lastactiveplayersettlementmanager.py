@@ -22,7 +22,22 @@
 import weakref
 
 from horizons.util.python import ManualConstructionSingleton
-from horizons.util import Point
+from horizons.util import Point, WorldObject
+from horizons.util.messaging.message import NewPlayerSettlementHovered, HoverSettlementChanged, NewSettlement
+
+def resolve_weakref(ref):
+	"""Resolves a weakref to a hardref, where the ref itself can be None"""
+	if ref is None:
+		return None
+	else:
+		return ref()
+
+def create_weakref(obj):
+	"""Safe create weakref, that supports None"""
+	if obj is None:
+		return None
+	else:
+		return weakref.ref(obj)
 
 class LastActivePlayerSettlementManager(object):
 	"""Keeps track of the last active (hovered over) player's settlement.
@@ -35,37 +50,88 @@ class LastActivePlayerSettlementManager(object):
 	__metaclass__ = ManualConstructionSingleton
 
 	def __init__(self, session):
-		self._settlement = None
 		self.session = session
 		self.session.view.add_change_listener(self._on_scroll)
 
+		# settlement mouse currently is above or None
+		self._cur_settlement = None
+
+		# last settlement of player mouse was on, only None at startup
+		self._last_player_settlement = None
+
+		# whether last known event was not on a player settlement
+		# can be used to detect reentering the area of _last_player_settlement
+		self._last_player_settlement_hovered_was_none = True
+
+		self.session.message_bus.subscribe_globally(NewSettlement, self._on_new_settlement_created)
+
+	def save(self, db):
+		if self._last_player_settlement is not None:
+			db("INSERT INTO last_active_settlement(type, value) VALUES(?, ?)", "PLAYER", self._last_player_settlement().worldid)
+		if self._cur_settlement is not None:
+			db("INSERT INTO last_active_settlement(type, value) VALUES(?, ?)", "ANY", self._cur_settlement().worldid)
+
+		db("INSERT INTO last_active_settlement(type, value) VALUES(?, ?)", "LAST_NONE_FLAG", self._last_player_settlement_hovered_was_none)
+
+	def load(self, db):
+		data = db("SELECT value FROM last_active_settlement WHERE type = \"PLAYER\"")
+		self._last_player_settlement = weakref.ref(WorldObject.get_object_by_id(data[0][0])) if data else None
+		data = db("SELECT value FROM last_active_settlement WHERE type = \"ANY\"")
+		self._cur_settlement = weakref.ref(WorldObject.get_object_by_id(data[0][0])) if data else None
+		data = db("SELECT value FROM last_active_settlement WHERE type = \"LAST_NONE_FLAG\"")
+		self._last_player_settlement_hovered_was_none = bool(data[0][0])
+
 	def remove(self):
-		self._settlement = None
+		self._last_player_settlement = None
+		self._cur_settlement = None
 		self.session.view.remove_change_listener(self._on_scroll)
 
 	def update(self, current):
-		"""Update to new world position. Sets internal state to new settlement or no settlement"""
+		"""Update to new world position. Sets internal state to new settlement or no settlement
+		@param current: some kind of position coords with x- and y-values"""
 		settlement = self.session.world.get_settlement(Point(int(round(current.x)), int(round(current.y))))
 
-		self._settlement = weakref.ref(settlement) if \
+		# check if it's a new settlement independent of player
+		if resolve_weakref(self._cur_settlement) is not settlement:
+			self._cur_settlement = create_weakref(settlement)
+			self.session.message_bus.broadcast(HoverSettlementChanged(self, settlement))
+
+		# player-sensitive code
+		new_player_settlement = weakref.ref(settlement) if \
 		  settlement and settlement.owner.is_local_player else None
 
-		# set cityinfo for any settlement
-		self.session.ingame_gui.cityinfo_set(settlement)
+		need_msg = False
+		# check if actual last player settlement is a new one
+		if new_player_settlement is not None and \
+		   resolve_weakref(self._last_player_settlement) is not resolve_weakref( new_player_settlement):
+			self._last_player_settlement = new_player_settlement
+			need_msg = True
 
-		# set res info only if it's a player settlement
-		self.session.ingame_gui.resource_overview.set_inventory_instance( self.get() )
+		# check if we changed to or from None
+		# this doesn't change the last settlement, but we need a message
+		if (new_player_settlement is None and not self._last_player_settlement_hovered_was_none) or \
+		   (new_player_settlement is not None and self._last_player_settlement_hovered_was_none):
+			need_msg = True
 
-	def get(self):
-		"""The last settlement belonging to the player the mouse has hovered above"""
-		ref = self._settlement
-		if ref is not None and ref() is not None: # weakref
-			return ref()
-		else:
+		if need_msg:
+			self.session.message_bus.broadcast(
+			  NewPlayerSettlementHovered(self, resolve_weakref(new_player_settlement)))
+		self._last_player_settlement_hovered_was_none = (new_player_settlement is None)
+
+	def get(self, get_current_pos=False):
+		"""The last settlement belonging to the player the mouse has hovered above.
+		@param get_current_pos: get current position even if it's None
+		"""
+		if get_current_pos and self._last_player_settlement_hovered_was_none:
 			return None
+		return resolve_weakref(self._last_player_settlement)
+
+	def get_current_settlement(self):
+		"""Returns settlement mouse currently hovers over or None"""
+		return resolve_weakref(self._cur_settlement)
 
 	def _on_scroll(self):
-		"""Called when view changes"""
+		"""Called when view changes. Scrolling and zooming can change cursor position."""
 		if not hasattr(self.session, "cursor"): # not inited yet
 			return
 		pos = self.session.cursor.__class__.last_event_pos
@@ -73,3 +139,9 @@ class LastActivePlayerSettlementManager(object):
 			loc = self.session.cursor.get_exact_world_location_from_event( pos )
 			self.update(loc)
 
+	def _on_new_settlement_created(self, msg):
+		# if the player has created a new settlement, it is the current one, even
+		# if the mouse hasn't hovered over it. Required when immediately entering build menu.
+		if msg.settlement.owner.is_local_player:
+			self._last_player_settlement = weakref.ref(msg.settlement)
+			self._last_player_settlement_hovered_was_none = False

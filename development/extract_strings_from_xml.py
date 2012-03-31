@@ -116,7 +116,7 @@ def list_all_files():
 				result.append('%s/%s' % (entry[0], filename))
 	return sorted(result)
 
-def content_from_element(element_name, parse_tree, text_name='text'):
+def content_from_element(element_name, parse_tree, text_name):
 
 	def _set_default_name(element, default_name):
 		element.setAttribute('name', default_name)
@@ -153,20 +153,22 @@ def content_from_file(filename):
 	print '@ %s' % filename
 	parsed = xml.dom.minidom.parse(filename)
 
-	strings = content_from_element('Label', parsed) + \
-		content_from_element('Button', parsed) + \
-		content_from_element('CheckBox', parsed) + \
-		content_from_element('RadioButton', parsed) + \
-		content_from_element('Window', parsed, 'title') + \
-		content_from_element('OkButton', parsed, 'tooltip') + \
-		content_from_element('CancelButton', parsed, 'tooltip') + \
-		content_from_element('DeleteButton', parsed, 'tooltip') + \
-		content_from_element('TooltipButton', parsed, 'tooltip') + \
-		content_from_element('TooltipIcon', parsed, 'tooltip') + \
-		content_from_element('TooltipLabel', parsed, 'text') + \
-		content_from_element('TooltipLabel', parsed, 'tooltip') + \
-		content_from_element('TooltipProgressBar', parsed, 'tooltip') + \
-		content_from_element('ToggleImageButton', parsed, 'tooltip')
+	strings = \
+		content_from_element('Button', parsed, 'text') + \
+		content_from_element('CheckBox', parsed, 'text') + \
+		content_from_element('Label', parsed, 'text') + \
+		content_from_element('RadioButton', parsed, 'text') + \
+\
+		content_from_element('CancelButton', parsed, 'helptext') + \
+		content_from_element('DeleteButton', parsed, 'helptext') + \
+		content_from_element('OkButton', parsed, 'helptext') + \
+\
+		content_from_element('Button', parsed, 'helptext') + \
+		content_from_element('Icon', parsed, 'helptext') + \
+		content_from_element('ImageButton', parsed, 'helptext') + \
+		content_from_element('Label', parsed, 'helptext') + \
+		content_from_element('ProgressBar', parsed, 'helptext') + \
+		content_from_element('ToggleImageButton', parsed, 'helptext')
 
 	if len(strings):
 		printname = filename.rsplit("/",1)[1]

@@ -43,7 +43,21 @@ class InvalidScenarioFileFormat(Exception):
 
 class ScenarioEventHandler(LivingObject):
 	"""Handles event, that make up a scenario. See wiki.
-	An instance of this class is bound to a set of events. On a new scenario, you need a new instance."""
+	An instance of this class is bound to a set of events. On a new scenario, you need a new instance.
+
+	Scenarios consist of condition-action events.
+	When all conditions of an event become true, the action is executed and the event is
+	removed from the scenario. All events only happen once.
+
+	Whenever the game state changes in a way, that can change the truth value of a condition,
+	the event handler must be notified. It will then check all relevant events.
+	It is imperative for this notification to always be triggered, else the scenario gets stuck.
+	For conditions, where this approach doesn't make sense (e.g. too frequent changes),
+	a periodic check can be used.
+
+	Save/load works by dumping all info into a yaml string in the savegame,
+	which is loaded just like normal scenarios are loaded.
+	"""
 
 	CHECK_CONDITIONS_INTERVAL = 3 # seconds
 
@@ -178,15 +192,9 @@ class ScenarioEventHandler(LivingObject):
 		except Exception as e: # catch anything yaml or functions that yaml calls might throw
 			raise InvalidScenarioFileFormat(str(e))
 
-	_yaml_file_cache = {} # only used in the method below
-	"""
-	This caches the parsed output of a yaml file.
-	It also checks if the cache is invalidated, therefore we can't use the
-	decorator.
-	"""
 	@classmethod
 	def _parse_yaml_file(cls, filename):
-		return YamlCache.get_file(filename)
+		return YamlCache.get_file(filename, game_data=True)
 
 	def _apply_data(self, data):
 		"""Apply data to self loaded via yaml.load
@@ -220,9 +228,8 @@ class ScenarioEventHandler(LivingObject):
 		# every data except events are static, so reuse old data
 		data = copy.deepcopy(self._data)
 		del data['events']
-		yaml_code = yaml.dump(data, line_break=u'\n')
-		yaml_code = yaml_code.rstrip(u'}\n')
-		#yaml_code = yaml_code.strip('{}')
+		yaml_code = dump_dict_to_yaml(data)
+		yaml_code = yaml_code.rstrip(u'}\n') # remove last } so we can add stuff
 		yaml_code += ', events: [ %s ] }' % ', '.join(event.to_yaml() for event in self._events)
 		return yaml_code
 
@@ -286,9 +293,7 @@ class _Action(object):
 
 	def to_yaml(self):
 		"""Returns yaml representation of self"""
-		arguments_yaml = yaml.safe_dump(self.arguments, line_break='\n')
-		# NOTE: the line above used to end with this: .replace('\n', '')
-		# which broke formatting of logbook messages, of course. Revert in case of problems.
+		arguments_yaml = dump_dict_to_yaml(self.arguments)
 		return "{arguments: %s, type: %s}" % (arguments_yaml, self.action_type)
 
 
@@ -317,7 +322,15 @@ class _Condition(object):
 
 	def to_yaml(self):
 		"""Returns yaml representation of self"""
-		arguments_yaml = yaml.safe_dump(self.arguments, line_break='\n')
-		# NOTE: the line above used to end with this: .replace('\n', '')
-		# which broke formatting of logbook messages, of course. Revert in case of problems.
+		arguments_yaml = dump_dict_to_yaml(self.arguments)
 		return '{arguments: %s, type: "%s"}' % ( arguments_yaml, self.cond_type)
+
+
+def dump_dict_to_yaml(data):
+	"""Wrapper for dumping yaml data using common parameters"""
+	# NOTE: the line below used to end with this: .replace('\n', '')
+	# which broke formatting of logbook messages, of course. Revert in case of problems.
+
+	# default_flow_style: makes use of short list notation without newlines (required here)
+	return yaml.safe_dump(data, line_break='\n', default_flow_style=True)
+

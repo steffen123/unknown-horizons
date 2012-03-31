@@ -78,7 +78,8 @@ class IngameType(type):
 					name = _( self._strip_translation_marks( name_data[lvl] ) )
 				assert name is not None, "name attribute is wrong: "+str(yaml_data['name'])
 				self._level_specific_names[lvl] = name
-			self._name = name_data[ min(name_data) ] # use first as default
+			_name = name_data[ min(name_data) ] # use first as default
+			self._name = _( self._strip_translation_marks( _name ) )
 		else: # assume just one string
 			self._name = _( self._strip_translation_marks( name_data ) )
 		self.radius = yaml_data['radius']
@@ -87,6 +88,9 @@ class IngameType(type):
 		self.action_sets_by_level = self.action_sets_by_level(self.action_sets)
 		self.baseclass = yaml_data['baseclass'] # mostly only for debug
 		self._real_object = None # wrapped by _object
+
+		# TODO: move this to the producer component as soon as there is support for class attributes there
+		self.additional_provided_resources = yaml_data['additional_provided_resources'] if 'additional_provided_resources' in yaml_data else []
 
 		"""TUTORIAL: Now you know the basic attributes each type has. Further attributes
 		specific to buildings and units can be found in horizons/world/{buildings/units}/__init__.py

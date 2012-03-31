@@ -164,7 +164,10 @@ class Collector(Unit):
 		def fix_job_object():
 			# resolve worldid to object later
 			if self.job:
-				self.job.object = WorldObject.get_object_by_id( self.job.object )
+				if self.job.object == -1:
+					self.job.object = None
+				else:
+					self.job.object = WorldObject.get_object_by_id( self.job.object )
 
 		# apply state when job object is loaded for sure
 		Scheduler().add_new_object(
@@ -387,7 +390,7 @@ class Collector(Unit):
 
 	def end_job(self):
 		"""Contrary to setup_new_job"""
-		# he finished the job now
+		# the job now is finished now
 		# before the new job can begin this will be executed
 		self.log.debug("%s end_job - waiting for new search_job", self)
 		if self.start_hidden:

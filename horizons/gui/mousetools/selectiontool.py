@@ -40,7 +40,8 @@ class SelectionTool(NavigationTool):
 	def remove(self):
 		# Deselect if needed while exiting
 		if self.deselect_at_end:
-			for i in self.filter_selectable( self.session.selected_instances ):
+			selectables = self.filter_selectable( self.session.selected_instances )
+			for i in self.filter_component(SelectableComponent, selectables):
 				i.deselect()
 		super(SelectionTool, self).remove()
 
@@ -48,15 +49,23 @@ class SelectionTool(NavigationTool):
 		# also enemy entities are selectable, but the selection representation will differ
 		return entity.has_component(SelectableComponent)
 
+	def filter_component(self, component, instances):
+		"""Only get specific component from a list of world objects"""
+		return [instance.get_component(component) for instance in instances]		
+
 	def filter_selectable(self, instances):
-		"""Only keeps relevant components from a list of worldobjects"""
-		return [ instance.get_component(SelectableComponent) for instance in instances \
-		         if self.is_selectable(instance) ]
+		"""Only keeps selectables from a list of world objects"""
+		return filter(self.is_selectable, instances)
+
+	def is_owned_by_player(self, instance):
+		"""Returns boolean if single world object is owned by local player"""
+		return instance.owner is not None and \
+			hasattr(instance.owner, "is_local_player") and \
+			instance.owner.is_local_player
 
 	def filter_owner(self, instances):
 		"""Only keep instances belonging to the user. This is used for multiselection"""
-		return [ i for i in instances if \
-		         i.owner is not None and hasattr(i.owner, "is_local_player") and i.owner.is_local_player ]
+		return [ i for i in instances if self.is_owned_by_player(i) ]
 
 	def fife_instance_to_uh_instance(self, instance):
 		"""Visual fife instance to uh game logic object or None"""
@@ -103,6 +112,14 @@ class SelectionTool(NavigationTool):
 			# get selection components
 			instances = ( self.fife_instance_to_uh_instance(i) for i in instances )
 			instances = [ i for i in instances if i is not None ]
+
+			#we only consider selectable items when dragging a selection box
+			instances = self.filter_selectable(instances)
+
+			#if there's at least one of player unit, we don't select any enemies
+			#applies both to buildings and ships
+			if( any((self.is_owned_by_player(instance) for instance in instances))):
+				instances = self.filter_owner(instances)
 
 			self._update_selection( instances, do_multi )
 
@@ -170,6 +187,12 @@ class SelectionTool(NavigationTool):
 			instances = self.get_hover_instances(evt)
 			self.select_old = frozenset(self.session.selected_instances) if evt.isControlPressed() else frozenset()
 
+			instances = filter(self.is_selectable, instances)
+			#on single click only one building should be selected from the hover_instances
+			#the if is for [] and [single_item] cases (they crashed)
+			#it acts as user would expect (instances[0] selects buildings in front first)
+			instances = instances if len(instances) <= 1 else [instances[0]]
+
 			self._update_selection(instances)
 
 			self.select_begin = (evt.getX(), evt.getY())
@@ -208,11 +231,11 @@ class SelectionTool(NavigationTool):
 				instances = user_instances
 			else:
 				instances = [iter(instances).next()]
-
-		selectable = frozenset( self.filter_selectable(instances) )
+		selectable = frozenset( self.filter_component(SelectableComponent, instances))
 
 		# apply changes
-		selected_components = set(self.filter_selectable(self.session.selected_instances))
+		selected_components = set(self.filter_component(SelectableComponent, 
+					  self.filter_selectable(self.session.selected_instances)))
 		for sel_comp in selected_components - selectable:
 			sel_comp.deselect()
 		for sel_comp in selectable - selected_components:

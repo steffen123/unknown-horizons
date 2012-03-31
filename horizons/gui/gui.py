@@ -23,6 +23,7 @@ import glob
 import os
 import os.path
 import random
+import traceback
 import time
 import tempfile
 import logging
@@ -38,7 +39,6 @@ from horizons.util import Callback
 from horizons.extscheduler import ExtScheduler
 from horizons.world.component.ambientsoundcomponent import AmbientSoundComponent
 from horizons.util.gui import LazyWidgetsDict
-from horizons.i18n.utils import N_
 
 from horizons.gui.modules import SingleplayerMenu, MultiplayerMenu
 from horizons.command.game import PauseCommand, UnPauseCommand
@@ -66,6 +66,7 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 	  'aidataselection' : 'book',
 	  'select_savegame': 'book',
 	  'ingame_pause': 'book',
+	  'game_settings' : 'book',
 #	  'credits': 'book',
 	  }
 
@@ -87,14 +88,22 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 	def show_main(self):
 		"""Shows the main menu """
 		self._switch_current_widget('mainmenu', center=True, show=True, event_map = {
-			'startSingle'    : self.show_single,
+			'startSingle'    : self.show_single, # first is the icon in menu
+			'start'          : self.show_single, # second is the lable in menu
 			'startMulti'     : self.show_multi,
+			'start_multi'    : self.show_multi,
 			'settingsLink'   : self.show_settings,
+			'settings'       : self.show_settings,
 			'helpLink'       : self.on_help,
+			'help'           : self.on_help,
 			'closeButton'    : self.show_quit,
+			'quit'           : self.show_quit,
 			'dead_link'      : self.on_chime, # call for help; SoC information
+			'chimebell'      : self.on_chime,
 			'creditsLink'    : self.show_credits,
-			'loadgameButton' : horizons.main.load_game
+			'credits'        : self.show_credits,
+			'loadgameButton' : horizons.main.load_game,
+			'loadgame'       : horizons.main.load_game
 		})
 
 		self.on_escape = self.show_quit
@@ -282,7 +291,7 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 		# Prepare widget
 		old_current = self._switch_current_widget('select_savegame')
 		self.current.findChild(name='headline').text = _('Save game') if mode == 'save' else _('Load game')
-		self.current.findChild(name='okButton').tooltip = _('Save game') if mode == 'save' else _('Load game')
+		self.current.findChild(name='okButton').helptext = _('Save game') if mode == 'save' else _('Load game')
 
 		name_box = self.current.findChild(name="gamename_box")
 		if mp and mode == 'load': # have gamename
@@ -417,15 +426,35 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 		@param onPressEscape: callback that is to be called if the escape button is pressed
 		@param event_map: dictionary with callbacks for buttons. See pychan docu: pychan.widget.mapEvents()
 		"""
+		# TODO: get rid of onPressEscape, only used below when cancelButton is not defined
+
 		self.current_dialog = dlg
 		if event_map is not None:
 			dlg.mapEvents(event_map)
-		if onPressEscape is not None:
-			def _escape(event):
-				if event.getKey().getValue() == fife.Key.ESCAPE:
+
+		# handle escape and enter keypresses
+		def _on_keypress(event, dlg=dlg): # rebind to make sure this dlg is used
+			from horizons.engine import pychan_util
+			if event.getKey().getValue() == fife.Key.ESCAPE: # convention says use cancel action
+				btn = dlg.findChild(name="cancelButton")
+				callback = pychan_util.get_button_event(btn) if btn else None
+				if callback:
+					callback()
+				else:
+					# escape should hide the dialog default
+					print 'ici', onPressEscape
 					pychan.internal.get_manager().breakFromMainLoop(onPressEscape)
 					dlg.hide()
-			dlg.capture(_escape, event_name="keyPressed")
+			elif event.getKey().getValue() == fife.Key.ENTER: # convention says use ok action
+				btn = dlg.findChild(name="okButton")
+				callback = pychan_util.get_button_event(btn) if btn else None
+				if callback:
+					callback()
+				# can't guess a default action here
+
+		dlg.capture(_on_keypress, event_name="keyPressed")
+
+		# show that a dialog is being executed, this can sometimes require changes in program logic elsewhere
 		self.dialog_executed = True
 		ret = dlg.execute(bind)
 		self.dialog_executed = False
@@ -448,12 +477,13 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 		else:
 			return self.show_dialog(popup, {'okButton' : True}, onPressEscape = True)
 
-	def show_error_popup(self, windowtitle, description, advice=None, details=None):
+	def show_error_popup(self, windowtitle, description, advice=None, details=None, _first=True):
 		"""Displays a popup containing an error message.
 		@param windowtitle: title of popup, will be auto-prefixed with "Error: "
 		@param description: string to tell the user what happened
 		@param advice: how the user might be able to fix the problem
 		@param details: technical details, relevant for debugging but not for the user
+		@param _first: Don't touch this.
 
 		Guide for writing good error messages:
 		http://www.useit.com/alertbox/20010624.html
@@ -464,7 +494,19 @@ class Gui(SingleplayerMenu, MultiplayerMenu):
 			msg += advice + u"\n"
 		if details:
 			msg += _(u"Details:") + u" " + details
-		self.show_popup( _(u"Error:") + u" " + windowtitle, msg, show_cancel_button=False)
+		try:
+			self.show_popup( _(u"Error:") + u" " + windowtitle, msg, show_cancel_button=False)
+		except SystemExit: # user really wants us to die
+			raise
+		except:
+			# could be another game error, try to be persistent in showing the error message
+			# else the game would be gone without the user being able to read the message.
+			if _first:
+				traceback.print_exc()
+				print 'Exception while showing error, retrying once more'
+				return self.show_error_popup(windowtitle, description, advice, details, _first=False)
+			else:
+				raise # it persists, we have to die.
 
 	def build_popup(self, windowtitle, message, show_cancel_button = False, size=0):
 		""" Creates a pychan popup widget with the specified properties.
@@ -662,8 +704,7 @@ def build_help_strings(widgets):
 	The layout is defined through HELPSTRING_LAYOUT and translated.
 	"""
 	#i18n this defines how each line in our help looks like. Default: '[C] = Chat'
-	#xgettext:python-format
-	HELPSTRING_LAYOUT = _('[{key}] = {text}')
+	HELPSTRING_LAYOUT = _('[{key}] = {text}') #xgettext:python-format
 
 	#HACK Ugliness starts; load actions defined through keys and map them to FIFE key strings
 	actions = KeyConfig._Actions.__dict__
@@ -682,8 +723,12 @@ def build_help_strings(widgets):
 		try:
 			keyname = '{key}'.format(key=actionmap[str(actions[name[4:]])])
 		except KeyError:
-			keyname = ' '
+			# manually add keys that are not used for keylistener purposes
+			if name == 'lbl_SHIFT':
+				keyname = 'SHIFT' # uninterrupted building
+			else:
+				keyname = ' '
 		lbl[0].text = HELPSTRING_LAYOUT.format(text=_(lbl[0].text), key=keyname.upper())
 
 	author_label = widgets.findChild(name='fife_and_uh_team')
-	author_label.tooltip = u"www.unknown-[br]horizons.org[br]www.fifengine.net"
+	author_label.helptext = u"www.unknown-[br]horizons.org[br]www.fifengine.net"

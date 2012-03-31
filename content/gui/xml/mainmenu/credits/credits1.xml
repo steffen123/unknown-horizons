@@ -62,11 +62,17 @@
 			<Label text="mtfk (Voice internationalization)" />
 		</VBox>
 	</VBox>
+
+	<VBox> <Label text="2012"  name="headline" />
+		<VBox  name="box">
+			<Label text="Foaly (Resource icons)" />
+		</VBox>
+	</VBox>
 </VBox>
 </ScrollArea>
 
 <Container position="0,500"  size="1000,100">
-	<OkButton position="800,0"  tooltip="Exit to main menu" />
+	<OkButton position="800,0"  helptext="Exit to main menu" />
 </Container>
 
 <Container position="810,0"  size="170,500">

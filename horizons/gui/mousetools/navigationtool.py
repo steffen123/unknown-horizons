@@ -26,8 +26,9 @@ import horizons.main
 from horizons.gui.mousetools.cursortool import CursorTool
 from horizons.util import WorldObject
 from horizons.util.lastactiveplayersettlementmanager import LastActivePlayerSettlementManager
-from horizons.gui.widgets.tooltip import TooltipIcon
 from horizons.constants import LAYERS
+
+from fife.extensions.pychan.widgets import Icon
 
 class NavigationTool(CursorTool):
 	"""Navigation Class to process mouse actions ingame"""
@@ -45,7 +46,7 @@ class NavigationTool(CursorTool):
 		horizons.main.fife.eventmanager.addCommandListener(self.cmdlist)
 		self.cmdlist.onCommand = self.onCommand
 
-		class CoordsTooltip(TooltipIcon):
+		class CoordsTooltip(object):
 			@classmethod
 			def get_instance(cls, cursor_tool):
 				if cursor_tool.session.coordinates_tooltip is not None:
@@ -61,17 +62,19 @@ class NavigationTool(CursorTool):
 				self.cursor_tool = cursor_tool
 				self.enabled = False
 
+				self.icon = Icon()
+
 			def toggle(self):
 				self.enabled = not self.enabled
-				if not self.enabled and self.tooltip_shown:
-					self.hide_tooltip()
+				if not self.enabled and self.icon.tooltip_shown:
+					self.icon.hide_tooltip()
 
 			def show_evt(self, evt):
 				if self.enabled:
 					x, y = self.cursor_tool.get_world_location_from_event(evt).to_tuple()
-					self.tooltip = str(x) + ', ' + str(y) + " "+_("Press H to remove this hint")
-					self.position_tooltip(evt)
-					self.show_tooltip()
+					self.icon.helptext = str(x) + ', ' + str(y) + " "+_("Press H to remove this hint")
+					self.icon.position_tooltip(evt)
+					self.icon.show_tooltip()
 
 		self.tooltip = CoordsTooltip.get_instance(self)
 
@@ -142,8 +145,20 @@ class NavigationTool(CursorTool):
 		evt.consume()
 
 	def onCommand(self, command):
-		if command.getCommandType() == fife.CMD_APP_ICONIFIED or command.getCommandType() == fife.CMD_INPUT_FOCUS_LOST:
-			self.session.view.autoscroll(0, 0) #stop autoscroll
+		"""Called when some kind of command-event happens.
+		For "documentation", see:
+		engine/core/eventchannel/command/ec_commandids.h
+		engine/core/eventchannel/eventmanager.cpp
+		in fife.
+		It's usually about mouse/keyboard focus or window being iconified/restored.
+		"""
+		STOP_SCROLLING_ON = (fife.CMD_APP_ICONIFIED,
+		                     fife.CMD_MOUSE_FOCUS_LOST,
+		                     fife.CMD_INPUT_FOCUS_LOST)
+		if command.getCommandType() in STOP_SCROLLING_ON:
+			# a random, unreproducible crash has session set to None. Check because it doesn't hurt.
+			if self.session is not None:
+				self.session.view.autoscroll(0, 0) # stop autoscroll
 
 	def get_hover_instances(self, evt, layers=None):
 		"""
@@ -173,4 +188,4 @@ class NavigationTool(CursorTool):
 
 	def end(self):
 		super(NavigationTool, self).end()
-		self.tooltip = None
+		self.helptext = None

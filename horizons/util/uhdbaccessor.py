@@ -24,7 +24,7 @@ from random import randint
 from horizons.constants import PATHS
 from horizons.util import decorators
 from horizons.util.dbreader import DbReader
-from horizons.util.gui import get_res_icon
+from horizons.util.gui import get_res_icon_path
 from horizons.entities import Entities
 
 ########################################################################
@@ -60,7 +60,7 @@ class UhDbAccessor(DbReader):
 		if only_if_inventory:
 			sql += " AND shown_in_inventory = 1"
 		try:
-			return self.cached_query(sql, id)[0][0]
+			return _(self.cached_query(sql, id)[0][0])
 		except IndexError:
 			return None
 
@@ -94,7 +94,8 @@ class UhDbAccessor(DbReader):
 		if only_inventory:
 			sql += " AND shown_in_inventory = 1 "
 		query = self.cached_query(sql)
-		return [(query[res][0], get_res_icon(query[res][0])[0]) for res in xrange(len(query))]
+		format_data = lambda res: (res, get_res_icon_path(res, 50))
+		return [format_data(row[0]) for row in query]
 
 	# Sound table
 
@@ -148,7 +149,8 @@ class UhDbAccessor(DbReader):
 		buildingtype = Entities.buildings[building_class_id]
 		#xgettext:python-format
 		tooltip = _("{building}: {description}")
-		return tooltip.format(building=buildingtype._name, description=buildingtype.tooltip_text)
+		return tooltip.format(building=_(buildingtype._name),
+		                      description=_(buildingtype.tooltip_text))
 
 	@decorators.cachedmethod
 	def get_related_building_ids(self, building_class_id):
@@ -160,6 +162,16 @@ class UhDbAccessor(DbReader):
 		return map(lambda x: x[0], self.cached_query(sql, building_class_id))
 
 	@decorators.cachedmethod
+	def get_related_building_ids_for_menu(self, building_class_id):
+		"""Returns list of building ids related to building_class_id, which should
+		be shown in the build_related menu.
+		@param building_class_id: class of building, int
+		@return list of building class ids
+		"""
+		sql = "SELECT related_building FROM related_buildings WHERE building = ? and show_in_menu = 1"
+		return map(lambda x: x[0], self.cached_query(sql, building_class_id))
+
+	@decorators.cachedmethod
 	def get_inverse_related_building_ids(self, building_class_id):
 		"""Inverse of the above, gives the lumberjack to the tree.
 		@param building_class_id: class of building, int
@@ -167,6 +179,12 @@ class UhDbAccessor(DbReader):
 		"""
 		sql = "SELECT building FROM related_buildings WHERE related_building = ?"
 		return map(lambda x: x[0], self.cached_query(sql, building_class_id))
+
+	@decorators.cachedmethod
+	def get_buildings_with_related_buildings(self):
+		"""Returns all buildings that have related buildings"""
+		sql = "SELECT DISTINCT building FROM related_buildings"
+		return map(lambda x: x[0], self.cached_query(sql))
 
 	# Message table
 
@@ -300,11 +318,6 @@ class UhDbAccessor(DbReader):
 		"""Returns building types that should become translucent on demand"""
 		# use set because of quick contains check
 		return frozenset( i[0] for i in self("SELECT type FROM translucent_buildings") )
-
-	@decorators.cachedmethod
-	def get_status_icon_exclusions(self):
-		return frozenset( i[0] for i in self("SELECT object_type FROM status_icon_exclusions") )
-
 
 	# Weapon table
 

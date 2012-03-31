@@ -29,9 +29,9 @@ from horizons.command.uioptions import AddToBuyList, AddToSellList, RemoveFromBu
                                        RemoveFromSellList
 from horizons.gui.widgets.tradehistoryitem import TradeHistoryItem
 from horizons.util import Callback, WorldObject
-from horizons.util.gui import load_uh_widget, get_res_icon, create_resource_selection_dialog
-from horizons.world.component.storagecomponent import StorageComponent
+from horizons.util.gui import load_uh_widget, get_res_icon_path, create_resource_selection_dialog
 from horizons.world.component.tradepostcomponent import TradePostComponent
+from horizons.constants import TRADER
 
 class BuySellTab(TabInterface):
 	"""
@@ -74,7 +74,7 @@ class BuySellTab(TabInterface):
 		# use dynamic change code to init the slots
 		buy_list = self.tradepost.buy_list
 		for res in buy_list:
-			if slot_count < self.slots:
+			if slot_count < slots:
 				self.slots[slot_count].action = 'buy'
 				self.add_resource(res, slot_count, buy_list[res])
 				self._show_buy( self.slots[slot_count] )
@@ -82,7 +82,7 @@ class BuySellTab(TabInterface):
 				slot_count += 1
 		sell_list = self.tradepost.sell_list
 		for res in sell_list:
-			if slot_count < self.slots:
+			if slot_count < slots:
 				self.slots[slot_count].action = 'sell'
 				self.add_resource(res, slot_count, sell_list[res])
 				self._show_sell( self.slots[slot_count] )
@@ -94,7 +94,7 @@ class BuySellTab(TabInterface):
 		self.trade_history_widget_cache = {} # {(tick, player_id, resource_id, amount, gold): widget, ...}
 
 		self.hide()
-		self.tooltip = _("Trade")
+		self.helptext = _("Trade")
 		self.inited = True
 
 	def hide(self):
@@ -200,18 +200,20 @@ class BuySellTab(TabInterface):
 				self.remove_sell_from_settlement(slot.res)
 			if res_id != 0:
 				self.add_sell_to_settlement(res_id, value, slot.id)
-		else:
-			if slot.action is "buy" and slot.res is not None:
+		elif slot.action is "buy":
+			if slot.res is not None: # slot has been in use before, delete old value
 				self.remove_buy_from_settlement(slot.res)
 			if res_id != 0:
 				self.add_buy_to_settlement(res_id, value, slot.id)
+		else:
+			assert False
 
 		button = slot.findChild(name="button")
 		fillbar = slot.findChild(name="fillbar")
 		# reset slot value for new res
 		if res_id == 0:
 			button.up_image, button.down_image, button.hover_image = [ self.dummy_icon_path ] * 3
-			button.tooltip = u""
+			button.helptext = u""
 			slot.findChild(name="amount").text = u""
 			slot.findChild(name="slider").value = 0.0
 			slot.res = None
@@ -223,11 +225,12 @@ class BuySellTab(TabInterface):
 			button.up_image = None
 			button.hover_image = None
 		else:
-			icons = get_res_icon(res_id)
-			button.up_image = icons[0]
-			button.down_image = icons[0]
-			button.hover_image = icons[1] # disabled icon
-			button.tooltip = self.session.db.get_res_name(res_id)
+			icon = get_res_icon_path(res_id, 50)
+			icon_disabled = get_res_icon_path(res_id, 50, greyscale=True)
+			button.up_image = icon
+			button.down_image = icon
+			button.hover_image = icon_disabled
+			button.helptext = self.session.db.get_res_name(res_id)
 			slot.res = res_id
 			# use some python magic to assign a res attribute to the slot to
 			# save which res_id it stores
@@ -238,8 +241,8 @@ class BuySellTab(TabInterface):
 			filled = float(inventory[res_id]) / inventory.get_limit(res_id)
 			fillbar.position = (icon.width - fillbar.width - 1,
 			                    icon.height - int(icon.height*filled))
-			# show buy action by default (set to sell and toggle)
-			slot.action = "sell"
+			# reuse code from toggle to finish setup (must switch state before, it will reset it)
+			slot.action = "sell" if slot.action is "buy" else "buy"
 			self.toggle_buysell(slot_id, keep_hint=keep_hint)
 		slot.adaptLayout()
 
@@ -259,9 +262,12 @@ class BuySellTab(TabInterface):
 		elif slot.action is "sell":
 			# setting to buy
 			self._show_buy(slot)
+			slot.action = "buy"
 			if slot.res is not None:
 				self.remove_sell_from_settlement(slot.res)
 				self.add_buy_to_settlement(slot.res, limit, slot.id)
+		else:
+			assert False
 
 		if not keep_hint:
 			self._update_hint(slot_id)
@@ -324,7 +330,7 @@ class BuySellTab(TabInterface):
 			self.show_resource_menu(widget.parent.id)
 		elif event.getButton() == fife.MouseEvent.RIGHT:
 			# remove the buy/sell offer
-			self.add_resource(0, widget.parent.id, None, False)
+			self.add_resource(0, widget.parent.id)
 
 	def show_resource_menu(self, slot_id):
 		"""
@@ -357,15 +363,20 @@ class BuySellTab(TabInterface):
 		slot = self.slots[slot_id]
 		limit = int( slot.findChild(name="slider").value )
 		action = slot.action
+		price = self.session.db.get_res_value(slot.res)
 		if action == "buy":
 			#xgettext:python-format
-			hint = _("Will buy {resource_name} whenever less than {limit}t are in stock.")
+			hint = _("Will buy {resource_name} for {price} gold/t whenever less than {limit}t are in stock.")
+			price *= TRADER.PRICE_MODIFIER_SELL
 		elif action == "sell":
 			#xgettext:python-format
-			hint = _("Will sell {resource_name} whenever more than {limit}t are available.")
+			hint = _("Will sell {resource_name} for {price} gold/t whenever more than {limit}t are available.")
+			price *= TRADER.PRICE_MODIFIER_BUY
 
 		hint = hint.format(limit=unicode(limit),
-		                   resource_name=_(self.session.db.get_res_name(slot.res)))
+		                   resource_name=self.session.db.get_res_name(slot.res),
+		                   price=int(price))
+		# same price rounding as in tradepostcomponent
 		self._set_hint( hint )
 
 	def _set_hint(self, text):

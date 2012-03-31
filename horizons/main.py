@@ -33,6 +33,7 @@ import sys
 import os.path
 import random
 import json
+import traceback
 import threading
 import thread # for thread.error raised by threading.Lock.release
 import shutil
@@ -57,11 +58,14 @@ _modules = Modules()
 # garbage collection
 __string_previewer = None
 
-def start(command_line_arguments):
+command_line_arguments = None
+
+def start(_command_line_arguments):
 	"""Starts the horizons. Will drop you to the main menu.
-	@param command_line_arguments: options object from optparse.OptionParser. see run_uh.py.
+	@param _command_line_arguments: options object from optparse.OptionParser. see run_uh.py.
 	"""
-	global fife, db, debug, preloading
+	global fife, db, debug, preloading, command_line_arguments
+	command_line_arguments = _command_line_arguments
 	# NOTE: globals are designwise the same thing as singletons. they don't look pretty.
 	#       here, we only have globals that are either trivial, or only one instance may ever exist.
 
@@ -92,7 +96,6 @@ def start(command_line_arguments):
 		  ) )
 		sys.exit(0)
 
-
 	# init fife before mp_bind is parsed, since it's needed there
 	fife = Fife()
 
@@ -122,8 +125,6 @@ def start(command_line_arguments):
 
 	# init game parts
 
-	_init_gettext(fife)
-
 	client_id = fife.get_uh_setting("ClientID")
 	if client_id is None or len(client_id) == 0:
 		# We need a new client id
@@ -141,6 +142,9 @@ def start(command_line_arguments):
 			from tests.gui.logger import setup_gui_logger
 			setup_gui_logger()
 		except ImportError:
+			import traceback
+			traceback.print_exc()
+			print
 			print "Gui logging requires code that is only present in the repository and is not being installed."
 			return False
 
@@ -204,8 +208,10 @@ def start(command_line_arguments):
 	elif command_line_arguments.load_quicksave is not None:
 		startup_worked = _load_last_quicksave()
 	elif command_line_arguments.stringpreview:
-		first_map = SavegameManager.get_maps()[0][0]
-		startup_worked = _start_map(first_map, ai_players=0, human_ai=False, trader_enabled=False, pirate_enabled=False, \
+		tiny = [ i for i in SavegameManager.get_maps()[0] if 'tiny' in i ]
+		if not tiny:
+			tiny = SavegameManager.get_map()[0]
+		startup_worked = _start_map(tiny[0], ai_players=0, human_ai=False, trader_enabled=False, pirate_enabled=False, \
 			force_player_id=command_line_arguments.force_player_id)
 		from development.stringpreviewwidget import StringPreviewWidget
 		__string_previewer = StringPreviewWidget(_modules.session)
@@ -243,10 +249,6 @@ def start(command_line_arguments):
 def quit():
 	"""Quits the game"""
 	global fife
-	if _modules.session is not None and _modules.session.is_alive:
-		_modules.session.end()
-	preload_game_join(preloading)
-	ExtScheduler.destroy_instance()
 	fife.quit()
 
 def start_singleplayer(map_file, playername = "Player", playercolor = None, is_scenario = False, \
@@ -313,7 +315,12 @@ def start_singleplayer(map_file, playername = "Player", playercolor = None, is_s
 		print "Failed to load", map_file
 		traceback.print_exc()
 		if _modules.session is not None and _modules.session.is_alive:
-			_modules.session.end()
+			try:
+				_modules.session.end()
+			except Exception as e:
+				print
+				traceback.print_exc()
+				print "Additionally to failing when loading, cleanup afterwards also failed"
 		_modules.gui.show_main()
 		headline = _(u"Failed to start/load the game")
 		descr = _(u"The game you selected couldn't be started.") + u" " +\
@@ -372,24 +379,6 @@ def load_game(ai_players=0, human_ai=False, savegame=None, is_scenario=False, ca
 		ai_players=ai_players, human_ai=human_ai, pirate_enabled=pirate_enabled, \
 		trader_enabled=trader_enabled, force_player_id=force_player_id)
 	return True
-
-
-def _init_gettext(fife):
-	"""
-	Maps _ to the ugettext unicode gettext call. Use: _(string).
-	N_ takes care of plural forms for different languages. It masks ungettext
-	calls (unicode, plural-aware _() ) to create different translation strings
-	depending on the counter value. Not all languages have only two plural forms
-	"One" / "Anything else". Use: N_("{n} dungeon", "{n} dungeons", n).format(n=n)
-	where n is a counter. N_ is, for some reason, broken. Cf. horizons.i18n.utils
-	We will need to make gettext recognise namespaces some time, but hardcoded
-	'unknown-horizons' works for now since we currently only use one namespace.
-	"""
-	from gettext import translation
-	namespace_translation = translation('unknown-horizons', 'content/lang', fallback=True)
-	_  = namespace_translation.ugettext
-	N_ = namespace_translation.ungettext
-
 
 
 ## GAME START FUNCTIONS

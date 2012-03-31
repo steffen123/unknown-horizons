@@ -33,8 +33,6 @@ from horizons.world.building.buildable import BuildableSingle
 from horizons.command.building import Build
 from horizons.world.component.storagecomponent import StorageComponent
 from horizons.world.componentholder import ComponentHolder
-from horizons.util.messaging.message import RemoveAllStatusIcons
-
 
 class BasicBuilding(ComponentHolder, ConcreteObject):
 	"""Class that represents a building. The building class is mainly a super class for other buildings."""
@@ -44,8 +42,6 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 	buildable_upon = False # whether we can build upon this building
 	is_building = True
 	tearable = True
-	show_buildingtool_preview_tab = True # whether to show the tab of the building. not shown for
-																			# e.g. paths. the tab hides a part of the map.
 	layer = LAYERS.OBJECTS
 
 
@@ -59,10 +55,10 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 	@param action_set_id: use this action set id. None means choose one at random
 	"""
 	def __init__(self, x, y, rotation, owner, island, level=None, action_set_id=None, **kwargs):
-		self.owner = owner # set immediately, it is needed before __init
+		self.__pre_init(owner, rotation, Point(x, y), level=level)
 		super(BasicBuilding, self).__init__(x=x, y=y, rotation=rotation, owner=owner, \
 								                        island=island, **kwargs)
-		self.__init(Point(x, y), rotation, level, action_set_id=action_set_id)
+		self.__init( action_set_id=action_set_id )
 		self.island = island
 
 		settlements = self.island.get_settlements(self.position, owner)
@@ -75,18 +71,30 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 
 		assert self.settlement is None or isinstance(self.settlement, Settlement)
 
-	def __init(self, origin, rotation, level=None, remaining_ticks_of_month=None, action_set_id=None):
+	def __pre_init(self, owner, rotation, origin, level=None):
+		"""Here we face the awkward situation of requiring a forth init function.
+		It is called like __init, but before other parts are inited via super().
+		This is necessary since some attributes are used by these other parts."""
+		self.owner = owner
 		if level is None:
 			level = 0 if self.owner is None else self.owner.settler_level
 		self.level = level
+		self.rotation = rotation
+		if self.rotation in (135, 315): # Rotate the rect correctly
+			self.position = ConstRect(origin, self.size[1]-1, self.size[0]-1)
+		else:
+			self.position = ConstRect(origin, self.size[0]-1, self.size[1]-1)
+
+	def __init(self, remaining_ticks_of_month=None, action_set_id=None):
 		self._action_set_id = action_set_id if action_set_id is not None else \
 		    self.get_random_action_set(self.level)[0]
-		self.__set_position(rotation, origin)
 
 		self.loading_area = self.position # shape where collector get resources
 
-		self._instance, action_set_id = self.getInstance(self.session, origin.x, origin.y, rotation=rotation,\
-		                                                 action_set_id=self._action_set_id)
+		origin = self.position.origin
+		self._instance, action_set_id = \
+		  self.getInstance(self.session, origin.x, origin.y, rotation=self.rotation,\
+		                   action_set_id=self._action_set_id)
 		self._instance.setId(str(self.worldid))
 
 		if self.has_running_costs: # Get payout every 30 seconds
@@ -94,13 +102,6 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 			run_in = remaining_ticks_of_month if remaining_ticks_of_month is not None else interval
 			Scheduler().add_new_object(self.get_payout, self, \
 			                           run_in=run_in, loops=-1, loop_interval=interval)
-
-	def __set_position(self, rotation, origin):
-			self.rotation = rotation
-			if self.rotation in (135, 315): # Rotate the rect correctly
-				self.position = ConstRect(origin, self.size[1]-1, self.size[0]-1)
-			else:
-				self.position = ConstRect(origin, self.size[0]-1, self.size[1]-1)
 
 	def toggle_costs(self):
 		self.running_costs , self.running_costs_inactive = \
@@ -120,8 +121,6 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 		if hasattr(self, "disaster"):
 			self.disaster.recover(self)
 		self.island.remove_building(self)
-		if self.has_status_icon:
-			self.session.message_bus.broadcast(RemoveAllStatusIcons(self, self))
 		#instance is owned by layer...
 		#self._instance.thisown = 1
 		super(BasicBuilding, self).remove()
@@ -141,15 +140,11 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 	def load(self, db, worldid):
 		self.island, self.settlement = self.load_location(db, worldid)
 		x, y, location, rotation, level = db.get_building_row(worldid)
-
 		owner_id = db.get_settlement_owner(location)
 		owner = None if owner_id is None else WorldObject.get_object_by_id(owner_id)
-		self.owner = owner # set before super().load(), they need it
 
-		# HACK set position in advance of loading because it is needed in the
-		# collecting component. The position is set twice because of this, but
-		# it should do no harm.
-		self.__set_position(rotation, Point(x, y))
+		# early init before super() call
+		self.__pre_init(owner, rotation, Point(x, y), level=level)
 
 		super(BasicBuilding, self).load(db, worldid)
 
@@ -165,8 +160,7 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 			else:
 				remaining_ticks_of_month = db_data[0][0]
 
-		self.__init(Point(x, y), rotation, level=level, \
-		            remaining_ticks_of_month=remaining_ticks_of_month)
+		self.__init(remaining_ticks_of_month=remaining_ticks_of_month)
 
 
 		# island.add_building handles registration of building for island and settlement
@@ -181,11 +175,6 @@ class BasicBuilding(ComponentHolder, ConcreteObject):
 		if isinstance(location_obj, Settlement):
 			# workaround: island can't be fetched from world, because it isn't fully constructed
 			island = WorldObject.get_object_by_id(db.get_settlement_island(location_obj.worldid))
-			# settlement might not have been registered in island, so do it if getter fails
-			"""
-			settlement = island.get_settlement(self.position.center()) or \
-								 island.add_existing_settlement(self.position, self.radius, location_obj, load=True)
-								 """
 			settlement = location_obj
 		else: # loc is island
 			island = location_obj

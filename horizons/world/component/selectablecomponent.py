@@ -125,6 +125,13 @@ class SelectableBuildingComponent(SelectableComponent):
 	_selected_tiles = ListHolder() # tiles that are selected. used for clean deselect.
 	_selected_fake_tiles = ListHolder() # fake tiles create over ocean to select (can't select ocean directly)
 
+	@classmethod
+	def reset(cls):
+		"""Called on session end to get rid of static data and init variables"""
+		cls._selected_tiles.l = []
+		cls._selected_fake_tiles.l = []
+
+
 	def __init__(self, tabs, enemy_tabs, range_applies_only_on_island=True):
 		super(SelectableBuildingComponent, self).__init__(tabs, enemy_tabs)
 
@@ -132,8 +139,8 @@ class SelectableBuildingComponent(SelectableComponent):
 
 	def initialize(self):
 		# check for related buildings (defined in db, not yaml)
-		related_building = self.session.db.get_related_building_ids(self.instance.id)
-		if len(related_building) > 0:
+		related_buildings = self.session.db.get_related_building_ids_for_menu(self.instance.id)
+		if len(related_buildings) > 0:
 			from horizons.gui.tabs import BuildRelatedTab
 			self.tabs += (BuildRelatedTab,)
 
@@ -216,6 +223,9 @@ class SelectableBuildingComponent(SelectableComponent):
 			return [] # that is not many
 		settlement = buildings[0].settlement
 
+		for building in buildings:
+			building.get_component(SelectableComponent).set_selection_outline()
+
 		coords = set( coord for \
 		              building in buildings for \
 		              coord in building.position.get_radius_coordinates(building.radius, include_self=True) )
@@ -232,11 +242,11 @@ class SelectableBuildingComponent(SelectableComponent):
 	@classmethod
 	def _do_select(cls, renderer, position, world, settlement,
 	               radius, range_applies_only_on_island):
-		if range_applies_only_on_island:
-			island = world.get_island(position.origin)
-			if island is None:
-				return # preview isn't on island, and therefore invalid
+		island = world.get_island(position.origin)
+		if island is None:
+			return # preview isn't on island, and therefore invalid
 
+		if range_applies_only_on_island:
 			ground_holder = None # use settlement or island as tile provider (prefer settlement, since it contains fewer tiles)
 			if settlement is None:
 				ground_holder = island
@@ -255,13 +265,12 @@ class SelectableBuildingComponent(SelectableComponent):
 				cls._fake_tile_obj = horizons.main.fife.engine.getModel().createObject('fake_tile_obj', 'ground')
 				fife.ObjectVisual.create(cls._fake_tile_obj)
 
-				img_path = 'content/gfx/base/water/fake_water.png'
+				img_path = 'content/gfx/base/fake_water.png'
 				img = horizons.main.fife.imagemanager.load(img_path)
 				for rotation in [45, 135, 225, 315]:
 					cls._fake_tile_obj.get2dGfxVisual().addStaticImage(rotation, img.getHandle())
 
 			layer = world.session.view.layers[LAYERS.FIELDS]
-			island = world.get_island(position.origin)
 			# color island or fake tile
 			for tup in position.get_radius_coordinates(radius):
 				tile = island.get_tile_tuple(tup)

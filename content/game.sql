@@ -154,6 +154,7 @@ INSERT INTO "message" VALUES('You need more {resource} to build this building.',
 INSERT INTO "message" VALUES('Some of your inhabitants have no access to a main square.',1,30.0,NULL,'NO_MAIN_SQUARE_IN_RANGE');
 INSERT INTO "message" VALUES('Some of your inhabitants just moved out.',1,40.0,NULL,'SETTLERS_MOVED_OUT');
 INSERT INTO "message" VALUES('You won!',1,60.0,NULL,'YOU_HAVE_WON');
+INSERT INTO "message" VALUES('You failed the scenario.',1,60.0,NULL,'YOU_LOST');
 INSERT INTO "message" VALUES('Your mine has run out of resources.',1,30.0,NULL,'MINE_EMPTY');
 INSERT INTO "message" VALUES('You can also drag roads.',1,20.0,NULL,'DRAG_ROADS_HINT');
 INSERT INTO "message" VALUES('{player1} and {player2} have allied their forces.',1,10.0,NULL,'DIPLOMACY_STATUS_NEUTRAL_ALLY');
@@ -177,19 +178,22 @@ INSERT INTO "object_sounds" VALUES(5,7);
 INSERT INTO "object_sounds" VALUES(11,5);
 INSERT INTO "object_sounds" VALUES(18,1);
 INSERT INTO "object_sounds" VALUES(1000010,4);
-CREATE TABLE related_buildings (building int, related_building int);
-INSERT INTO "related_buildings" VALUES(8,17);
-INSERT INTO "related_buildings" VALUES(20,18);
-INSERT INTO "related_buildings" VALUES(20,19);
-INSERT INTO "related_buildings" VALUES(20,22);
-INSERT INTO "related_buildings" VALUES(20,36);
-INSERT INTO "related_buildings" VALUES(20,38);
-INSERT INTO "related_buildings" VALUES(20,39);
-INSERT INTO "related_buildings" VALUES(3,4);
-INSERT INTO "related_buildings" VALUES(3,42);
-INSERT INTO "related_buildings" VALUES(3,5);
-INSERT INTO "related_buildings" VALUES(3,21);
-INSERT INTO "related_buildings" VALUES(3,32);
+CREATE TABLE related_buildings (building int, related_building int, show_in_menu BOOL NOT NULL DEFAULT ('1'));
+INSERT INTO "related_buildings" VALUES(8,17, 1);
+INSERT INTO "related_buildings" VALUES(20,18, 1);
+INSERT INTO "related_buildings" VALUES(20,19, 1);
+INSERT INTO "related_buildings" VALUES(20,22, 1);
+INSERT INTO "related_buildings" VALUES(20,36, 1);
+INSERT INTO "related_buildings" VALUES(20,38, 1);
+INSERT INTO "related_buildings" VALUES(20,39, 1);
+INSERT INTO "related_buildings" VALUES(20,46, 1);
+INSERT INTO "related_buildings" VALUES(3,4, 1);
+INSERT INTO "related_buildings" VALUES(3,5, 1);
+INSERT INTO "related_buildings" VALUES(3,21, 1);
+INSERT INTO "related_buildings" VALUES(3,32, 1);
+INSERT INTO "related_buildings" VALUES(3,42, 0); --hidden for 2012.1, show afterwards!
+INSERT INTO "related_buildings" VALUES(6,1, 0);
+INSERT INTO "related_buildings" VALUES(45, 3, 0);
 CREATE TABLE mine(mine INTEGER NOT NULL, deposit NOT NULL);
 INSERT INTO "mine" VALUES(25,23);
 INSERT INTO "mine" VALUES(28,34);
@@ -501,7 +505,7 @@ INSERT INTO "resource" VALUES(1,'boards',1.25,4,1);
 INSERT INTO "resource" VALUES(1,'food',2,5,1);
 INSERT INTO "resource" VALUES(1,'tools',18.5,6,1);
 INSERT INTO "resource" VALUES(1,'bricks',15,7,1);
-INSERT INTO "resource" VALUES(0,'wood',1,8,1);
+INSERT INTO "resource" VALUES(0,'trees',1,8,1);
 INSERT INTO "resource" VALUES(0,'grass',0,9,0);
 INSERT INTO "resource" VALUES(1,'wool',2.5,10,1);
 INSERT INTO "resource" VALUES(0,'faith',NULL,11,1);
@@ -535,8 +539,26 @@ INSERT INTO "resource" VALUES(0,'medical herbs',2.5,38,0);
 INSERT INTO "resource" VALUES(0,'acorns',0,39,1);
 INSERT INTO "resource" VALUES(1,'cannon',100,40,1);
 INSERT INTO "resource" VALUES(0,'dagger',10,41,0);
-INSERT INTO "resource" VALUES(0,'fire',0,42,0);
 INSERT INTO "resource" VALUES(0,'gun',100,43,0);
+INSERT INTO "resource" VALUES(0,'grain',0,42,1); -- corn ears
+INSERT INTO "resource" VALUES(0,'corn',2,43,1);
+INSERT INTO "resource" VALUES(1,'flour',0,44,1);
+--these are hidden for now, waiting for the respective building graphics
+--INSERT INTO "resource" VALUES(0,'spice plants',2,45,1);
+--INSERT INTO "resource" VALUES(1,'spices',2.5,46,1);
+--INSERT INTO "resource" VALUES(1,'condiments',10,47,1);
+--INSERT INTO "resource" VALUES(0,'stone deposit',0,51,1);
+--INSERT INTO "resource" VALUES(1,'stone tops',7.5,52,1);
+--INSERT INTO "resource" VALUES(0,'cocoa beans',2,53,1);
+--INSERT INTO "resource" VALUES(1,'cocoa',2.5,54,1);
+--INSERT INTO "resource" VALUES(1,'confectionery',10,55,1);
+--INSERT INTO "resource" VALUES(1,'candles',10,56,1);
+--INSERT INTO "resource" VALUES(0,'vines',2,57,1);
+--INSERT INTO "resource" VALUES(1,'grapes',2.5,58,1);
+--INSERT INTO "resource" VALUES(0,'alvearies',2,59,1);
+--INSERT INTO "resource" VALUES(1,'honeycombs',2.5,60,1);
+INSERT INTO "resource" VALUES(0,'fire',0,99,0); --
+
 CREATE TABLE translucent_buildings(type INTEGER);
 INSERT INTO "translucent_buildings" VALUES(17);
 INSERT INTO "translucent_buildings" VALUES(34);
@@ -555,53 +577,14 @@ CREATE TABLE "weapon" (
 INSERT INTO "weapon" VALUES(40,'ranged',7,5,15,3,4,2,1,'content/gfx/misc/cannonballs/cannonball.png');
 INSERT INTO "weapon" VALUES(41,'melee',3,1,1,3,2,1,0,'');
 INSERT INTO "weapon" VALUES(43,'bullet',5,3,6,3,4,2,0,'content/gfx/misc/cannonballs/cannonball.png');
-CREATE TABLE settler_production_line(level INTEGER, production_line INTEGER);
-INSERT INTO "settler_production_line" VALUES(0,71);
-INSERT INTO "settler_production_line" VALUES(0,72);
-INSERT INTO "settler_production_line" VALUES(1,19);
-INSERT INTO "settler_production_line" VALUES(1,20);
-INSERT INTO "settler_production_line" VALUES(1,21);
-INSERT INTO "settler_production_line" VALUES(1,26);
-INSERT INTO "settler_production_line" VALUES(0,30);
-INSERT INTO "settler_production_line" VALUES(1,30);
-INSERT INTO "settler_production_line" VALUES(2,30);
-INSERT INTO "settler_production_line" VALUES(2,43);
-INSERT INTO "settler_production_line" VALUES(2,20);
-INSERT INTO "settler_production_line" VALUES(2,21);
-INSERT INTO "settler_production_line" VALUES(2,44);
-INSERT INTO "settler_production_line" VALUES(2,41);
-INSERT INTO "settler_production_line" VALUES(2,69);
-INSERT INTO "settler_production_line" VALUES(2,70);
 CREATE TABLE settler_level (
     "level" INT NOT NULL DEFAULT (''),
     "name" TEXT NOT NULL DEFAULT (''),
     "tax_income" INT NOT NULL DEFAULT (''),
-    "inhabitants_max" INT
-, "residential_name" TEXT   DEFAULT (''));
-INSERT INTO "settler_level" VALUES(0,'sailor',3,2,'tent');
-INSERT INTO "settler_level" VALUES(1,'pioneer',6,3,'hut');
-INSERT INTO "settler_level" VALUES(2,'settler',10,5,'house');
-INSERT INTO "settler_level" VALUES(3,'citizen',15,8,'stone house');
-INSERT INTO "settler_level" VALUES(4,'merchant',21,13,'estate');
-INSERT INTO "settler_level" VALUES(5,'aristocrat',28,21,'manor');
-CREATE TABLE status_icon_exclusions (
-    "object_type" INT NOT NULL DEFAULT (''));
-INSERT INTO "status_icon_exclusions" VALUES(17);
-INSERT INTO "status_icon_exclusions" VALUES(1);
-INSERT INTO "status_icon_exclusions" VALUES(5);
-INSERT INTO "status_icon_exclusions" VALUES(33);
-INSERT INTO "status_icon_exclusions" VALUES(15);
-INSERT INTO "status_icon_exclusions" VALUES(18);
-INSERT INTO "status_icon_exclusions" VALUES(19);
-INSERT INTO "status_icon_exclusions" VALUES(22);
-INSERT INTO "status_icon_exclusions" VALUES(36);
-INSERT INTO "status_icon_exclusions" VALUES(45);
-INSERT INTO "status_icon_exclusions" VALUES(21);
-INSERT INTO "status_icon_exclusions" VALUES(32);
-INSERT INTO "status_icon_exclusions" VALUES(1000013);
-
-CREATE TABLE additional_provided_resources (
-    "object_id" INT NOT NULL,
-		"resource" INT NOT NULL
-	);
-INSERT INTO "additional_provided_resources" VALUES(3,42);
+    "inhabitants_max" INT);
+INSERT INTO "settler_level" VALUES(0,'Sailors',3,2);
+INSERT INTO "settler_level" VALUES(1,'Pioneers',6,3);
+INSERT INTO "settler_level" VALUES(2,'Settlers',10,5);
+INSERT INTO "settler_level" VALUES(3,'Citizens',15,8);
+INSERT INTO "settler_level" VALUES(4,'Merchants',21,13);
+INSERT INTO "settler_level" VALUES(5,'Aristocrats',28,21);

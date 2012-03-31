@@ -46,7 +46,7 @@ from horizons.util import WorldObject, LivingObject, livingProperty, SavegameAcc
 from horizons.util.uhdbaccessor import read_savegame_template
 from horizons.util.lastactiveplayersettlementmanager import LastActivePlayerSettlementManager
 from horizons.world.component.namedcomponent import NamedComponent
-from horizons.world.component.selectablecomponent import SelectableComponent
+from horizons.world.component.selectablecomponent import SelectableComponent, SelectableBuildingComponent
 from horizons.savegamemanager import SavegameManager
 from horizons.scenario import ScenarioEventHandler
 from horizons.world.component.ambientsoundcomponent import AmbientSoundComponent
@@ -128,7 +128,7 @@ class Session(LivingObject):
 		self.status_icon_manager = StatusIconManager(self)
 
 		self.selected_instances = set()
-		self.selection_groups = [set()] * 10 # List of sets that holds the player assigned unit groups.
+		self.selection_groups = [set() for _ in range(10)]  # List of sets that holds the player assigned unit groups.
 
 		self._old_autosave_interval = None
 
@@ -161,16 +161,15 @@ class Session(LivingObject):
 		raise NotImplementedError
 
 	def _clear_caches(self):
+		"""Clear all data caches in global namespace related to a session"""
 		WorldObject.reset()
 		NamedComponent.reset()
 		AIPlayer.clear_caches()
+		SelectableBuildingComponent.reset()
 
 	def end(self):
 		self.log.debug("Ending session")
 		self.is_alive = False
-
-		LastActivePlayerSettlementManager().remove()
-		LastActivePlayerSettlementManager.destroy_instance()
 
 		self.gui.session = None
 
@@ -190,8 +189,20 @@ class Session(LivingObject):
 			self.cursor.end()
 		# these will call end() if the attribute still exists by the LivingObject magic
 		self.ingame_gui = None # keep this before world
+
+		LastActivePlayerSettlementManager().remove() # keep after ingame_gui
+		LastActivePlayerSettlementManager.destroy_instance()
+
 		self.cursor = None
-		self.world.end() # must be called before the world ref is gone
+		try:
+			# This is likely to throw when the game state is invalid.
+			# Try to continue cleanup afterwards even if this fails.
+			# NOTE: This is not a proper solution, separating sessions by design (e.g. single processes) would be.
+			self.world.end() # must be called before the world ref is gone
+		except Exception:
+			import traceback
+			traceback.print_exc()
+			print 'Exception on world end(), trying to continue to cleanup'
 		self.world = None
 		self.keylistener = None
 		self.view = None
@@ -307,6 +318,8 @@ class Session(LivingObject):
 			self.scenario_eventhandler.load(savegame_db)
 		self.manager.load(savegame_db) # load the manager (there might me old scheduled ticks).
 		self.world.init_fish_indexer() # now the fish should exist
+		if self.is_game_loaded():
+			LastActivePlayerSettlementManager().load(savegame_db) # before ingamegui
 		self.ingame_gui.load(savegame_db) # load the old gui positions and stuff
 
 		for instance_id in savegame_db("SELECT id FROM selected WHERE `group` IS NULL"): # Set old selected instance
@@ -512,6 +525,7 @@ class Session(LivingObject):
 			self.view.save(db)
 			self.ingame_gui.save(db)
 			self.scenario_eventhandler.save(db)
+			LastActivePlayerSettlementManager().save(db)
 
 			for instance in self.selected_instances:
 				db("INSERT INTO selected(`group`, id) VALUES(NULL, ?)", instance.worldid)

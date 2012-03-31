@@ -21,10 +21,8 @@
 
 from fife.extensions.pychan import widgets
 
-from horizons.constants import GAME_SPEED
-from horizons.gui.widgets.tooltip import TooltipButton
+from fife.extensions.pychan.widgets import ImageButton
 from horizons.gui.widgets.statswidget import StatsWidget
-from horizons.scheduler import Scheduler
 from horizons.util.python import decorators
 from horizons.util import Callback
 from horizons.world.component.namedcomponent import NamedComponent
@@ -36,7 +34,6 @@ class PlayersSettlements(StatsWidget):
 
 	def __init__(self, session):
 		super(PlayersSettlements, self).__init__(session)
-		Scheduler().add_new_object(Callback(self._refresh_tick), self, run_in = 1, loops = -1, loop_interval = GAME_SPEED.TICKS_PER_SECOND / 3)
 
 	def refresh(self):
 		super(PlayersSettlements, self).refresh()
@@ -95,10 +92,10 @@ class PlayersSettlements(StatsWidget):
 		name.text = unicode(settlement.get_component(NamedComponent).name)
 		name.min_size = name.max_size = (175, 20)
 
-		rename_icon = TooltipButton(name = 'rename_%d' % settlement.worldid)
+		rename_icon = ImageButton(name = 'rename_%d' % settlement.worldid)
 		rename_icon.up_image = "content/gui/images/background/rename_feather_20.png"
 		rename_icon.hover_image = "content/gui/images/background/rename_feather_20_h.png"
-		rename_icon.tooltip = _("Click to change the name of your settlement")
+		rename_icon.helptext = _("Click to change the name of your settlement")
 		rename_icon.max_size = (20, 20) # (width, height)
 
 		self._add_generic_line_to_gui(settlement.worldid, [sequence_number_label, name, rename_icon],

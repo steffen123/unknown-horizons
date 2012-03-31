@@ -31,7 +31,7 @@ from horizons.constants import RES, BUILDINGS, GAME, SETTLER
 from horizons.world.building.buildingresourcehandler import BuildingResourceHandler
 from horizons.world.production.production import SettlerProduction, SingleUseProduction
 from horizons.command.building import Build
-from horizons.util import decorators, Callback
+from horizons.util import Callback
 from horizons.world.pathfinding.pather import StaticPather
 from horizons.command.production import ToggleActive
 from horizons.world.component.storagecomponent import StorageComponent
@@ -53,14 +53,14 @@ class Settler(BuildableRect, BuildingResourceHandler, BasicBuilding):
 
 	production_class = SettlerProduction
 
-	tabs = (SettlerOverviewTab,)
+	tabs = (SettlerOverviewTab, )
 
 	default_level_on_build = 0
 
 	_max_increment_reached_notification_displayed = False # this could be saved
 
 	def __init__(self, x, y, owner, instance=None, **kwargs):
-		kwargs['level'] = self.default_level_on_build # settlers always start in first level
+		kwargs['level'] = self.__class__.default_level_on_build # settlers always start in first level
 		super(Settler, self).__init__(x=x, y=y, owner=owner, instance=instance, **kwargs)
 
 	def __init(self, loading = False, last_tax_payed=0):
@@ -151,11 +151,6 @@ class Settler(BuildableRect, BuildingResourceHandler, BasicBuilding):
 		difficulty = self.owner.difficulty
 		result = int(round(difficulty.extra_happiness_constant + self.get_component(StorageComponent).inventory[RES.HAPPINESS_ID] * difficulty.happiness_multiplier))
 		return max(0, min(result, self.get_component(StorageComponent).inventory.get_limit(RES.HAPPINESS_ID)))
-
-	@property
-	def name(self):
-		house_name = self.session.db.get_settler_house_name(self.level) if hasattr(self, 'level') else 'unknown residence'
-		return (_(house_name)).title()
 
 	@property
 	def capacity_utilisation(self):

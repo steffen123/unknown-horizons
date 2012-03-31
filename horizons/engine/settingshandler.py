@@ -20,21 +20,17 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
-import platform
-import gettext
-import os
-import locale
+import logging
 
 from fife import fife
 from fife.extensions.fife_settings import FIFE_MODULE
 
 import horizons.main
 
+from horizons.i18n import change_language, find_available_languages
 from horizons.util import Callback, parse_port
-from horizons.i18n import update_all_translations
 from horizons.extscheduler import ExtScheduler
-from horizons.i18n.utils import get_fontdef_for_locale, find_available_languages
-from horizons.constants import LANGUAGENAMES
+from horizons.constants import LANGUAGENAMES, PATHS
 from horizons.network.networkinterface import NetworkInterface
 from horizons.engine import UH_MODULE
 
@@ -51,7 +47,7 @@ class SettingsHandler(object):
 	def add_settings(self):
 
 		# TODO: find a way to apply changing to a running game in a clean fashion
-		#       possibility: use singaling via changelistener
+		#       possibility: use signaling via changelistener
 		def update_minimap(*args):
 			try: horizons.main._modules.session.ingame_gui.minimap.draw()
 			except AttributeError: pass # session or gui not yet initialised
@@ -88,17 +84,28 @@ class SettingsHandler(object):
 		self._setting.createAndAddEntry(UH_MODULE, "NetworkPort", "network_port",
 				                        applyfunction=self.set_network_port)
 
+		self._setting.createAndAddEntry(UH_MODULE, "DebugLog", "debug_log",
+				                        applyfunction=self.set_debug_log)
+
 
 		self._setting.entries[FIFE_MODULE]['PlaySounds'].applyfunction = lambda x: self.engine.sound.setup_sound()
 		self._setting.entries[FIFE_MODULE]['PlaySounds'].requiresrestart = False
 
 		self._setting.entries[FIFE_MODULE]['RenderBackend'].applyfunction = lambda x: self._show_renderbackend_warning()
 
+		self._setting.createAndAddEntry(FIFE_MODULE, "FrameLimit", "fps_rate",
+				                        initialdata=[30, 45, 60, 90, 120], requiresrestart=True)
+
 		self._setting.createAndAddEntry(FIFE_MODULE, "MouseSensitivity", "mousesensitivity", \
 				                        #read comment in set_mouse_sensitivity function about this
 				                        #applyfunction=self.set_mouse_sensitivity, \
 				                        requiresrestart=True)
 
+	def apply_settings(self):
+		"""Called on startup to apply the effects of settings"""
+		self.update_languages()
+		if self.engine.get_uh_setting("DebugLog"):
+			self.set_debug_log(True, startup=True)
 
 	def setup_setting_extras(self):
 		"""Some kind of setting gui initalisation"""
@@ -236,45 +243,43 @@ class SettingsHandler(object):
 
 
 	def update_languages(self, data=None):
-		"""
-		Load/Change language of Unknown Horizons. Called on startup
-		and when changing the language.
-
-		data is used when changing the language in the settings menu.
-		"""
 		if data is None:
 			data = self._setting.get(UH_MODULE, "Language")
 
-		# get language key
-		symbol = LANGUAGENAMES.get_by_value(data)
+		language = LANGUAGENAMES.get_by_value(data)
+		change_language(language)
 
-		if symbol != '': # non-default
-			try:
-				# NOTE about gettext fallback mechanism:
-				# English is not shipped as .mo file, thus if English is
-				# selected we use NullTranslations to get English output.
-				fallback = (symbol == 'en')
-				trans = gettext.translation('unknown-horizons', find_available_languages()[symbol], \
-								            languages=[symbol], fallback=fallback)
-				trans.install(unicode=True, names=['ngettext',])
-			except IOError:
+	def set_debug_log(self, data, startup=False):
+		"""
+		@param data: boolean
+		@param startup: True if on startup to apply settings. Won't show popup
+		"""
+		options = horizons.main.command_line_arguments
+
+		if data: # enable logging
+			if options.debug:
+				# log file is already set up, just make sure everything is logged
+				logging.getLogger().setLevel( logging.DEBUG )
+			else: # set up all anew
+				class Data(object):
+					debug = False
+					debug_log_only = True
+					logfile = None
+					debug_module = []
+				# use setup call reference, see run_uh.py
+				options.setup_debugging(Data)
+				options.debug = True
+
+			if not startup:
+				headline = _("Logging enabled")
 				#xgettext:python-format
-				print _("Configured language {lang} could not be loaded").format(lang=symbol)
-				self._setting.set(UH_MODULE, "Language", LANGUAGENAMES[''])
-				return self.update_languages() # recurse
-		else:
-			# default locale
-			if platform.system() == "Windows": # win doesn't set the language variable by default
-				os.environ[ 'LANGUAGE' ] = locale.getdefaultlocale()[0]
-			gettext.install('unknown-horizons', 'content/lang', unicode=True, names=['ngettext',])
+				msg = _("Logs are written to {directory}.").format(directory=PATHS.LOG_DIR)
+				horizons.main._modules.gui.show_popup(headline, msg)
 
-		# update fonts
-		fontdef = get_fontdef_for_locale(symbol)
-		self.engine.pychan.loadFonts(fontdef)
-
-		# dynamically reset all translations of active widgets
-		update_all_translations()
-
+		else: #disable logging
+			logging.getLogger().setLevel( logging.WARNING )
+			# keep debug flag in options so to not reenable it fully twice
+			# on reenable, onyl the level will be reset
 
 # misc utility
 

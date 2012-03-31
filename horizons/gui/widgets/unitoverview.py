@@ -21,9 +21,9 @@
 
 from fife.extensions import pychan
 
-from horizons.util.gui import load_uh_widget, get_res_icon
+from horizons.util.gui import load_uh_widget, get_res_icon_path
 from horizons.util import Callback
-from horizons.gui.widgets import TooltipIcon
+from fife.extensions.pychan.widgets import Icon
 from horizons.command.unit import SetStance
 from horizons.extscheduler import ExtScheduler
 from horizons.world.component.healthcomponent import HealthComponent
@@ -35,7 +35,7 @@ class StanceWidget(pychan.widgets.Container):
 		super(StanceWidget, self).__init__(size=(245,50), **kwargs)
 		widget = load_uh_widget('stancewidget.xml')
 		self.addChild(widget)
-		ExtScheduler().add_new_object(self.refresh, self, run_in=1, loops=-1)
+		ExtScheduler().add_new_object(self.refresh, self, run_in=0.3, loops=-1)
 
 	def init(self, instance):
 		self.instance = instance
@@ -49,10 +49,11 @@ class StanceWidget(pychan.widgets.Container):
 		ExtScheduler().add_new_object(self.refresh, self, run_in=1, loops=-1)
 
 	def refresh(self):
-		self.toggle_stance()
 		if not self.isVisible():
 			# refresh not needed
 			ExtScheduler().rem_all_classinst_calls(self)
+			return
+		self.toggle_stance()
 
 	def remove(self, caller=None):
 		"""Removes instance ref"""
@@ -112,12 +113,12 @@ class WeaponStorageWidget(pychan.widgets.HBox):
 			storage = self.instance.get_weapon_storage()
 			for weapon, amount in storage:
 				weapons_added = True
-				icon_image = get_res_icon(weapon)[2]
+				icon_image = get_res_icon_path(weapon, 24)
 				icon_tooltip = self.instance.session.db.get_res_name(weapon)+': '+str(amount)
-				icon = TooltipIcon(image = icon_image, tooltip = icon_tooltip)
+				icon = Icon(image = icon_image, helptext=icon_tooltip)
 				self.addChild(icon)
 		if not weapons_added:
 			icon_image = "content/gui/icons/resources/none.png"
-			icon = TooltipIcon(image = icon_image, tooltip = _("none"))
+			icon = Icon(image = icon_image, helptext=_("none"))
 			self.addChild(icon)
 
