@@ -164,6 +164,25 @@ class Fife(ApplicationBase):
 		else:
 			self.animationloader = SQLiteAnimationLoader()
 
+		def patch(func):
+			use_atlases = self.use_atlases
+			loader = self.animationloader
+			def wrapped(self, image):
+				if use_atlases and image == 'content/gfx/base/fake_water.png':
+					if self.exists(image):
+						img = self.get(image)
+					else:
+						img = self.create(image)
+						region = fife.Rect(1408, 1856, 64, 32)
+						img.useSharedImage(loader.atlasmap['content/gfx/atlas/base_resources_trees.png'], region)
+
+					return img
+
+				return func(self, image)
+			return wrapped
+
+		self.imagemanager.__class__.load = patch(self.imagemanager.__class__.load)
+
 		#Set game cursor
 		self.cursor = self.engine.getCursor()
 		self.cursor_images = {

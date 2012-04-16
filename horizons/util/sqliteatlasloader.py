@@ -31,6 +31,7 @@ class SQLiteAtlasLoader(object):
 	"""
 	def __init__(self):
 		self.atlaslib = []
+		self.atlasmap = {}
 
 		# TODO: There's something wrong with ground entities if atlas.sql
 		# is loaded only here, for now it's added to DB_FILES (empty file if no atlases are used)
@@ -45,6 +46,7 @@ class SQLiteAtlasLoader(object):
 			# print 'creating', atlas
 			img = horizons.main.fife.imagemanager.create(atlas)
 			self.atlaslib.append(img)
+			self.atlasmap[atlas] = img
 
 
 	def loadResource(self, location):
