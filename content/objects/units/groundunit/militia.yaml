@@ -1,6 +1,6 @@
 baseclass: groundunit.FightingGroundUnit
 id: 1000021
-name: Bomberman
+name: militia
 radius: 5
 velocity: 10.0
 components:

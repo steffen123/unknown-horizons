@@ -240,6 +240,16 @@ def player_number_of_ships_lt(session, player_id, number):
 	number_of_ships = len([s for s in session.world.ships if s.owner.worldid == player_id])
 	return number_of_ships < number
 
+@register(periodically=True)
+def player_number_of_groundunits_gt(session, player_id, number):
+	number_of_groundunits = len([s for s in session.world.groundunits if s.owner.worldid == player_id])
+	return number_of_groundunits > number
+
+@register(periodically=True)
+def player_number_of_groundunits_lt(session, player_id, number):
+	number_of_groundunits = len([s for s in session.world.groundunits if s.owner.worldid == player_id])
+	return number_of_groundunits < number
+
 @register()
 def _building_connected_to_all_of(session, building_class, *classes):
 	"""Returns the exact amount of buildings of type building_class that are
