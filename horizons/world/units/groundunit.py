@@ -69,9 +69,12 @@ class GroundUnit(Unit):
 		self.session.world.ground_unit_map[self.position.to_tuple()] = weakref.ref(self)
 		self.session.world.ground_unit_map[self._next_target.to_tuple()] = weakref.ref(self)
 
+	#def go(self, x, y):
+	#	super(GroundUnit, self).go(x, y)
+		#self.on_user_move_issued()
 	def go(self, x, y):
-		super(GroundUnit, self).go(x, y)
-		self.on_user_move_issued()
+		self.get_component(CommandableComponent).go(x, y)
+		self.stop_attack()
 		
 	def load(self, db, worldid):
 		super(GroundUnit, self).load(db, worldid)

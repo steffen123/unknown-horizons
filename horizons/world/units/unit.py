@@ -228,9 +228,9 @@ class Unit(MovingObject):
 				return (possible_target, path)
 		return (None, None)
 		
-	def go(self, x, y):
-		super(Unit, self).go(x, y)
-		self.on_user_move_issued()
+	#def go(self, x, y):
+	#	super(Unit, self).move(x, y)
+	#	self.on_user_move_issued()
 
 	@property
 	def classname(self):
