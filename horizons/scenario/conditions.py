@@ -242,12 +242,12 @@ def player_number_of_ships_lt(session, player_id, number):
 
 @register(periodically=True)
 def player_number_of_groundunits_gt(session, player_id, number):
-	number_of_groundunits = len([s for s in session.world.groundunits if s.owner.worldid == player_id])
+	number_of_groundunits = len([s for s in session.world.ground_units if s.owner.worldid == player_id])
 	return number_of_groundunits > number
 
 @register(periodically=True)
 def player_number_of_groundunits_lt(session, player_id, number):
-	number_of_groundunits = len([s for s in session.world.groundunits if s.owner.worldid == player_id])
+	number_of_groundunits = len([s for s in session.world.ground_units if s.owner.worldid == player_id])
 	return number_of_groundunits < number
 
 @register()
