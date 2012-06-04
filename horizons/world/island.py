@@ -31,7 +31,7 @@ from horizons.util.pathfinding.pathnodes import IslandPathNodes
 from horizons.constants import BUILDINGS, RES, UNITS
 from horizons.scenario import CONDITIONS
 from horizons.world.buildingowner import BuildingOwner
-from horizons.gui.widgets.minimap import Minimap
+#TODOsteffenmerge from horizons.gui.widgets.minimap import Minimap
 
 class Island(BuildingOwner, WorldObject):
 	"""The Island class represents an island. It contains a list of all things on the map
