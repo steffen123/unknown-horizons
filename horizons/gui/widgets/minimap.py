@@ -29,8 +29,6 @@ from horizons.extscheduler import ExtScheduler
 from horizons.util.python.decorators import bind_all
 from horizons.command.unit import Act
 from horizons.component.namedcomponent import NamedComponent
-from horizons.world.units.ship import Ship
-from horizons.world.units.groundunit import GroundUnit
 
 import math
 from math import sin, cos
@@ -587,7 +585,7 @@ class Minimap(object):
 			color = unit().owner.color.to_tuple()
 			dummy_point1.set(coord[0], coord[1])
 			# set correct icon
-			if isinstance(unit(), Ship):
+			if unit().is_ship:
 				if unit().owner is self.session.world.pirate:
 					unit_icon_path = self.__class__.SHIP_PIRATE_IMAGE
 				else: 	
@@ -619,7 +617,7 @@ class Minimap(object):
 					dummy_point0.set(coord[0] - 6, coord[1] - 7)
 					dummy_point1.set(coord[0] - 4, coord[1] - 3)
 					self.minimap_image.rendertarget.addLine(render_name, dummy_point0, dummy_point1, 0, 0, 0)
-			if isinstance(unit(), GroundUnit):
+			if unit().is_unit:
 				dummy_point0.set(coord[0], coord[1])
 				unit_icon_path = self.__class__.GROUND_UNIT_IMAGE
 				unit_icon = self.imagemanager.load(unit_icon_path)

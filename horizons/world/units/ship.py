@@ -43,6 +43,7 @@ class Ship(Unit):
 	pather_class = ShipPather
 	health_bar_y = -150
 	is_ship = True
+	is_unit = False
 
 	in_ship_map = True # (#1023)
 
