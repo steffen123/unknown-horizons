@@ -28,7 +28,7 @@ from horizons.util import Callback, Point
 from fife.extensions.pychan import widgets
 from fife.extensions.pychan.widgets import ImageButton
 from horizons.component.storagecomponent import StorageComponent
-#TODOsteffenmerge from horizons.gui.widgets.minimap import Minimap
+from horizons.gui.widgets.minimap import Minimap
 from horizons.command.uioptions import RouteConfigCommand
 from horizons.component.namedcomponent import NamedComponent
 from horizons.component.ambientsoundcomponent import AmbientSoundComponent
