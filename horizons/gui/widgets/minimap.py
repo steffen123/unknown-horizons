@@ -609,7 +609,6 @@ class Minimap(object):
 					dummy_point1.set(coord[0], coord[1] - 4)
 					self.minimap_image.rendertarget.addLine(render_name, dummy_point0,
 									dummy_point1, color[0], color[1], color[2])
-<<<<<<< HEAD
 					# add black border around the flag
 					dummy_point0.set(coord[0] - 6, coord[1] - 7)
 					dummy_point1.set(coord[0], coord[1] - 7)
@@ -634,24 +633,9 @@ class Minimap(object):
 									dummy_point1, dummy_point2,
 									dummy_point3, color[0], color[1], color[2])
 			# TODO: nicer selected view
+			#TODOsteffenmerge dummy_point0.set(coord[0], coord[1])
 			if unit() in self.session.selected_instances:
 				dummy_point0.set(coord[0], coord[1])
-=======
-				# add black border around the flag
-				dummy_point0.set(coord[0] - 6, coord[1] - 7)
-				dummy_point1.set(coord[0], coord[1] - 7)
-				self.minimap_image.rendertarget.addLine(render_name, dummy_point0, dummy_point1, 0, 0, 0)
-				dummy_point0.set(coord[0] - 4, coord[1] - 3)
-				dummy_point1.set(coord[0], coord[1] - 4)
-				self.minimap_image.rendertarget.addLine(render_name, dummy_point0, dummy_point1, 0, 0, 0)
-				dummy_point0.set(coord[0] - 6, coord[1] - 7)
-				dummy_point1.set(coord[0] - 4, coord[1] - 3)
-				self.minimap_image.rendertarget.addLine(render_name, dummy_point0, dummy_point1, 0, 0, 0)
-
-			# TODO: nicer selected view
-			dummy_point0.set(coord[0], coord[1])
-			if ship in self.session.selected_instances:
->>>>>>> master
 				self.minimap_image.rendertarget.addPoint(render_name, dummy_point0, *Minimap.COLORS["water"])
 				for x_off, y_off in ((-2,  0),
 							   (+2,  0),
