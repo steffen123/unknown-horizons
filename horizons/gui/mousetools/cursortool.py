@@ -72,7 +72,7 @@ class CursorTool(fife.IMouseListener):
 	def mouseDragged(self, evt):
 		pass
 
-	def get_world_location_from_event(self, evt):
+	def get_world_location(self, evt):
 		"""Returns the coordinates of an event at the map.
 
 		Why roundhalfplus?
@@ -93,9 +93,9 @@ class CursorTool(fife.IMouseListener):
 
 		return Point(roundhalfplus(mapcoord.x), roundhalfplus(mapcoord.y))
 
-	def get_exact_world_location_from_event(self, evt):
+	def get_exact_world_location(self, evt):
 		"""Returns the coordinates of an event at the map.
-		@return FifePoint with float coordinates"""
+		@return FifePoint with float coordinates or something with getX/getY"""
 		screenpoint = self._get_screenpoint(evt)
 		return self.session.view.cam.toMapCoordinates(screenpoint, False)
 

@@ -19,22 +19,27 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+import collections
+
 import horizons.main
 
 from horizons.constants import PLAYER
 from horizons.world.playerstats import PlayerStats
-from horizons.util import WorldObject, Callback, Color, DifficultySettings
+from horizons.util import WorldObject, Callback, Color, DifficultySettings, decorators
 from horizons.scenario import CONDITIONS
 from horizons.scheduler import Scheduler
-from horizons.world.componentholder import ComponentHolder
-from horizons.world.component.storagecomponent import StorageComponent
-from horizons.util.messaging.message import SettlerUpdate
+from horizons.component.componentholder import ComponentHolder
+from horizons.component.storagecomponent import StorageComponent
+from horizons.messaging import SettlerUpdate, NewDisaster
+from horizons.component.tradepostcomponent import TradePostComponent
 
 class Player(ComponentHolder, WorldObject):
 	"""Class representing a player"""
 
+	STATS_UPDATE_INTERVAL = 3 # seconds
+
 	regular_player = True # either a human player or a normal AI player (not trader or pirate)
-	component_templates = ({'StorageComponent': {'inventory': {'PositiveStorage': {}}}},)
+	component_templates = ({'StorageComponent': {'PositiveStorage': {}}},)
 
 
 	def __init__(self, session, worldid, name, color, difficulty_level = None):
@@ -69,17 +74,18 @@ class Player(ComponentHolder, WorldObject):
 		self.color = color
 		self.difficulty = DifficultySettings.get_settings(difficulty_level)
 		self.settler_level = settlerlevel
+		self.stats = None
 		assert self.color.is_default_color, "Player color has to be a default color"
-		self.session.message_bus.subscribe_globally(SettlerUpdate, self.notify_settler_reached_level)
 
-		if self.regular_player:
-			Scheduler().add_new_object(Callback(self.update_stats), self, run_in = 0)
+		SettlerUpdate.subscribe(self.notify_settler_reached_level)
+		NewDisaster.subscribe(self, self.notify_new_disaster)
 
 	@property
 	def is_local_player(self):
 		return self is self.session.world.player
 
 	def update_stats(self):
+		# will only be enabled on demand since it takes a while to calculate
 		Scheduler().add_new_object(Callback(self.update_stats), self, run_in = PLAYER.STATS_UPDATE_FREQUENCY)
 		self.stats = PlayerStats(self)
 
@@ -142,9 +148,39 @@ class Player(ComponentHolder, WorldObject):
 		"""The Mine calls this function to let the player know that the mine is empty."""
 		pass
 
+	def notify_new_disaster(self, message):
+		"""The message bus calls this when a building is 'infected' with a disaster."""
+		if self.is_local_player:
+			pos = message.building.position.center()
+			self.session.ingame_gui.message_widget.add(pos.x, pos.y, message.disaster_class.NOTIFICATION_TYPE)
+
 	def end(self):
 		self.stats = None
 		self.session = None
+
+	@decorators.temporary_cachedmethod(timeout=STATS_UPDATE_INTERVAL)
+	def get_balance_estimation(self):
+		"""This takes a while to calculate, so only do it every 2 seconds at most"""
+		return sum(settlement.balance for settlement in self.settlements)
+
+	@decorators.temporary_cachedmethod(timeout=STATS_UPDATE_INTERVAL)
+	def get_statistics(self):
+		"""Returns a namedtuple containing player-wide statistics"""
+		Data = collections.namedtuple('Data', ['running_costs', 'taxes', 'sell_income', 'buy_expenses', 'balance'])
+		# balance is duplicated here and above such that the version above
+		# can be used independently and the one here is always perfectly in sync
+		# with the other values here
+
+		get_sum = lambda l, attr : sum ( getattr(obj, attr) for obj in l )
+		tradeposts = [ s.get_component(TradePostComponent) for s in self.settlements ]
+		return Data(
+		  running_costs = get_sum(self.settlements, 'cumulative_running_costs'),
+		  taxes = get_sum(self.settlements, 'cumulative_taxes'),
+		  sell_income = get_sum(tradeposts, 'sell_income'),
+		  buy_expenses = get_sum(tradeposts, 'buy_expenses'),
+		  balance = get_sum(self.settlements, 'balance'),
+		)
+
 
 class HumanPlayer(Player):
 	"""Class for players that physically sit in front of the machine where the game is run"""

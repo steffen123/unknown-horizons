@@ -24,7 +24,7 @@ from fife import fife
 import horizons.main
 from horizons.command.unit import Act, Attack
 from horizons.command.diplomacy import AddEnemyPair
-from horizons.world.component.healthcomponent import HealthComponent
+from horizons.component.healthcomponent import HealthComponent
 from horizons.gui.mousetools.selectiontool import SelectionTool
 
 class AttackingTool(SelectionTool):
@@ -32,6 +32,9 @@ class AttackingTool(SelectionTool):
 		This will be used when attacking units are selected
 		it will have to respond on right click and change cursor image when hovering enemy units
 	"""
+
+	send_hover_instances_update = False
+
 	def __init__(self, session):
 		super(AttackingTool, self).__init__(session)
 
@@ -87,7 +90,6 @@ class AttackingTool(SelectionTool):
 				continue
 			try:
 				if instance.has_component(HealthComponent):
-					attackable = True
 					target = instance
 			except AttributeError:
 				pass

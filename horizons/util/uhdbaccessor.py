@@ -24,7 +24,7 @@ from random import randint
 from horizons.constants import PATHS
 from horizons.util import decorators
 from horizons.util.dbreader import DbReader
-from horizons.util.gui import get_res_icon_path
+from horizons.gui.util import get_res_icon_path
 from horizons.entities import Entities
 
 ########################################################################
@@ -108,34 +108,6 @@ class UhDbAccessor(DbReader):
 		       INNER JOIN sounds_special ON sounds.id = sounds_special.sound AND \
 		       sounds_special.type = ?'
 		return self.cached_query(sql, soundname)[0][0]
-
-
-	def get_random_action_set(self, object_id, level=0, exact_level=False):
-		"""Returns an action set for an object of type object_id in a level <= the specified level.
-		The highest level number is preferred.
-		@param db: UhDbAccessor
-		@param object_id: type id of building
-		@param level: level to prefer. a lower level might be chosen
-		@param exact_level: choose only action sets from this level. return val might be None here.
-		@return: tuple: (action_set_id, preview_action_set_id)"""
-		assert level >= 0
-
-		action_sets_by_lvl = Entities.buildings[object_id].action_sets_by_level
-		action_sets = Entities.buildings[object_id].action_sets
-		action_set = None
-		if exact_level:
-			action_set = action_sets_by_lvl[level][randint(0, len(action_sets_by_lvl[level])-1)] if len(action_sets_by_lvl[level]) > 0 else None
-		else: # search all levels for an action set, starting with highest one
-			for possible_level in reversed(xrange(level+1)):
-				if len(action_sets_by_lvl[possible_level]) > 0:
-					action_set = action_sets_by_lvl[possible_level][randint(0, len(action_sets_by_lvl[possible_level])-1)]
-					break
-		if action_set is None:
-			assert False, "Couldn't find action set for obj %s in lvl %s" % (object_id, level)
-
-		preview = action_sets[action_set]['preview'] if 'preview' in action_sets[action_set] else None
-		return (action_set, preview)
-
 
 	# Building table
 
@@ -227,14 +199,6 @@ class UhDbAccessor(DbReader):
 
 	# production_line table
 
-	def get_settler_production_lines(self, level):
-		"""Returns a list of settler's production lines for a specific level
-		@param level: int level for which to return the production lines
-		@return: list of production lines"""
-		return self.cached_query("SELECT production_line \
-		                          FROM settler_production_line \
-		                          WHERE level = ?", level)
-
 	def get_settler_name(self, level):
 		"""Returns the name for a specific settler level
 		@param level: int settler's level
@@ -256,34 +220,6 @@ class UhDbAccessor(DbReader):
 	def get_settler_inhabitants_max(self, level):
 		return self.cached_query("SELECT inhabitants_max FROM settler_level \
 		                          WHERE level=?", level)[0][0]
-
-	def get_settler_inhabitants(self, building_id):
-		return self.cached_query("SELECT inhabitants FROM settler WHERE rowid=?",
-		                         building_id)[0][0]
-
-	def get_settler_upgrade_material_prodline(self, level):
-		db_result = self.cached_query("SELECT production_line FROM upgrade_material \
-		                          WHERE level = ?", level)
-		return db_result[0][0] if db_result else None
-
-	def get_production_line_data(self, production_line_id):
-		consumption = self.cached_query("SELECT resource, amount FROM production \
-			              WHERE production_line = ? AND amount < 0 ORDER BY amount ASC", production_line_id)
-		production = self.cached_query("SELECT resource, amount FROM production \
-			             WHERE production_line = ? AND amount > 0 ORDER BY amount ASC", production_line_id)
-		consumption = list([list(x) for x in consumption])
-		production = list([list(x) for x in production])
-		(changes_anim, time, default) = self.cached_query("SELECT changes_animation, time, enabled_by_default FROM production_line WHERE id=?", production_line_id)[0]
-		prod_line =  { 'time': int(time) }
-		if changes_anim == 0:
-			prod_line['changes_animation'] = False
-		if default == 0:
-			prod_line['enabled_by_default'] = False
-		if len(production) > 0:
-			prod_line['produces'] = production
-		if len(consumption) > 0:
-			prod_line['consumes'] = consumption
-		return prod_line
 
 
 	# Misc

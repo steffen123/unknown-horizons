@@ -63,6 +63,7 @@ class SettingsHandler(object):
 		self._setting.createAndAddEntry(UH_MODULE, "AutosaveMaxCount", "autosavemaxcount")
 		self._setting.createAndAddEntry(UH_MODULE, "QuicksaveMaxCount", "quicksavemaxcount")
 		self._setting.createAndAddEntry(UH_MODULE, "EdgeScrolling", "edgescrolling")
+		self._setting.createAndAddEntry(UH_MODULE, "CursorCenteredZoom", "cursor_centered_zoom")
 		self._setting.createAndAddEntry(UH_MODULE, "UninterruptedBuilding", "uninterrupted_building")
 		self._setting.createAndAddEntry(UH_MODULE, "AutoUnload", "auto_unload")
 		self._setting.createAndAddEntry(UH_MODULE, "MinimapRotation", "minimaprotation", \
@@ -73,7 +74,7 @@ class SettingsHandler(object):
 
 		languages = find_available_languages().keys()
 
-		self._setting.createAndAddEntry(UH_MODULE, "Language", "cjkv_language",
+		self._setting.createAndAddEntry(UH_MODULE, "Language", "uni_language",
 				                        applyfunction=self.update_languages,
 				                        initialdata= [LANGUAGENAMES[x] for x in sorted(languages)])
 		self._setting.createAndAddEntry(UH_MODULE, "VolumeMusic", "volume_music",
@@ -145,7 +146,7 @@ class SettingsHandler(object):
 			message = _("The SDL renderer is meant as a fallback solution only and has serious graphical glitches. \n\nUse at own risk!")
 			horizons.main._modules.gui.show_popup(headline, message)
 
-	def update_slider_values(self, slider, factor = 1, unit = ''):
+	def update_slider_values(self, slider, factor=1, unit=''):
 		"""
 		slider - slider name
 		factor - value will be multiplied by factor
@@ -188,7 +189,7 @@ class SettingsHandler(object):
 			self.engine.sound.emitter['speech'].setGain(value)
 			for e in self.engine.sound.emitter['ambient']:
 				e.setGain(value*2)
-		self.update_slider_values('volume_effects', factor = 200, unit = '%')
+		self.update_slider_values('volume_effects', factor=200, unit='%')
 
 	def set_volume(self, emitter_name, value):
 		"""Sets the volume on the emitter specified by emitter_name.
@@ -206,7 +207,7 @@ class SettingsHandler(object):
 			value = self.settings_dialog.findChild(name="volume_music").value
 		if self._setting.get(FIFE_MODULE, "PlaySounds"):
 			self.engine.sound.emitter['bgsound'].setGain(value)
-		self.update_slider_values('volume_music', factor = 500, unit = '%')
+		self.update_slider_values('volume_music', factor=500, unit='%')
 
 
 	def set_network_port(self, port):

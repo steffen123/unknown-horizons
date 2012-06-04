@@ -19,7 +19,9 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
-from horizons.constants import SETTLER
+import hashlib
+
+from horizons.constants import TIER
 
 class IngameType(type):
 	"""Class that is used to create Ingame-Type-Classes from yaml data.
@@ -38,8 +40,8 @@ class IngameType(type):
 
 	# Base package to import from, must end with the '.', the package is appended
 	basepackage = 'horizons.world.building.'
-	# Class name beginning for the type.__new__ constructor
-	classstring = 'Type['
+	# Class name for the type.__new__ constructor
+	classstring = 'Type[{id}]'
 
 	def __new__(self, id,  yaml_data):
 		class_package = yaml_data['baseclass'].split('.')[0]
@@ -52,10 +54,10 @@ class IngameType(type):
 			super(cls, self).load(db, worldid)
 			return self
 
-		module = __import__(self.basepackage+class_package, [], [], [class_name])
-		return type.__new__(self, self.classstring + str(id) + ']',
+		module = __import__(str(self.basepackage+class_package), [], [], [str(class_name)])
+		return type.__new__(self, self.classstring.format(id=id),
 			(getattr(module, class_name),),
-			{'load': load, 'class_package': class_package, 'class_name': class_name})
+			{'load': load, 'class_package': str(class_package), 'class_name': str(class_name)})
 
 	def _strip_translation_marks(self, string):
 		if string.startswith("_ "):
@@ -73,7 +75,7 @@ class IngameType(type):
 			# fill up dict (fall down to highest class which has an name
 			name = None
 			self._level_specific_names = {}
-			for lvl in xrange( min(name_data), SETTLER.CURRENT_MAX_INCR+1 ):
+			for lvl in xrange(min(name_data), TIER.CURRENT_MAX + 1):
 				if lvl in name_data:
 					name = _( self._strip_translation_marks( name_data[lvl] ) )
 				assert name is not None, "name attribute is wrong: "+str(yaml_data['name'])
@@ -85,9 +87,10 @@ class IngameType(type):
 		self.radius = yaml_data['radius']
 		self.component_templates = yaml_data['components']
 		self.action_sets = yaml_data['actionsets']
-		self.action_sets_by_level = self.action_sets_by_level(self.action_sets)
 		self.baseclass = yaml_data['baseclass'] # mostly only for debug
 		self._real_object = None # wrapped by _object
+
+		self._parse_component_templates()
 
 		# TODO: move this to the producer component as soon as there is support for class attributes there
 		self.additional_provided_resources = yaml_data['additional_provided_resources'] if 'additional_provided_resources' in yaml_data else []
@@ -118,22 +121,42 @@ class IngameType(type):
 		* ai: horizons/ai/aiplayer. Way too big to describe here.
 		"""
 
+	def _parse_component_templates(self):
+		"""Prepares misc data in self.component_templates"""
+		producer = [ comp for comp in self.component_templates if \
+		             isinstance(comp, dict) and comp.iterkeys().next() == 'ProducerComponent' ]
+		if producer:
+			# we want to support string production line ids, the code should still only see integers
+			# therefore we do a deterministic string -> int conversion here
+
+			producer_data = producer[0]['ProducerComponent']
+			original_data = producer_data['productionlines']
+
+			new_data = {}
+
+			for old_key, v in original_data.iteritems():
+				if isinstance(old_key, int):
+					new_key = old_key
+				else:
+					# hash the string
+					new_key = int(hashlib.sha1(old_key).hexdigest(), 16)
+					# crop to integer. this might not be necessary, however the legacy code operated
+					# on this data type, so problems might occur, also with respect to performance.
+					# in princpile, strings and longs should also be supported, but for the sake of
+					# safety, we use ints.
+					new_key = int( new_key % 2**31 ) # this ensures it's an integer on all reasonable platforms
+				if new_key in new_data:
+					raise Exception("Error: production line id conflict. Please change \"%s\" to anything else for \"%s\"" % (old_key, self.name))
+				new_data[new_key] = v
+
+			producer_data['productionlines'] = new_data
+
+
 	@property
 	def _object(self):
 		if self._real_object is None:
 			self._loadObject()
 		return self._real_object
-
-	def action_sets_by_level(self, action_sets):
-		as_by_level = {}
-		for i in xrange(0, SETTLER.CURRENT_MAX_INCR+1):
-			as_by_level[i] = []
-			for setname, value in action_sets.iteritems():
-				if 'level' in value and value['level'] == i:
-					as_by_level[i].append(setname)
-				elif 'level' not in value and i == 0:
-					as_by_level[i] = setname
-		return as_by_level
 
 	def _loadObject(self):
 		"""Inits self._real_object"""

@@ -22,12 +22,9 @@
 
 __all__ = ['island', 'nature', 'player', 'settlement', 'ambientsound']
 
-import bisect
 import logging
 import json
 import copy
-import itertools
-import os.path
 
 from collections import deque
 
@@ -36,25 +33,21 @@ from horizons.world.island import Island
 from horizons.world.player import HumanPlayer
 from horizons.util import Point, Rect, Circle, WorldObject
 from horizons.util.color import Color
-from horizons.constants import UNITS, BUILDINGS, RES, GROUND, GAME, WILD_ANIMAL
+from horizons.constants import UNITS, BUILDINGS, RES, GROUND, GAME
 from horizons.ai.trader import Trader
 from horizons.ai.pirate import Pirate
 from horizons.ai.aiplayer import AIPlayer
 from horizons.entities import Entities
 from horizons.util import decorators, BuildingIndexer
-from horizons.util.dbreader import DbReader
-from horizons.util.uhdbaccessor import read_savegame_template
 from horizons.world.buildingowner import BuildingOwner
 from horizons.world.diplomacy import Diplomacy
 from horizons.world.units.bullet import Bullet
 from horizons.world.units.weapon import Weapon
-from horizons.command.building import Build
 from horizons.command.unit import CreateUnit
-from horizons.world.component.healthcomponent import HealthComponent
-from horizons.world.component.storagecomponent import StorageComponent
-from horizons.world.component.selectablecomponent import SelectableComponent
+from horizons.component.healthcomponent import HealthComponent
+from horizons.component.storagecomponent import StorageComponent
 from horizons.world.disaster.disastermanager import DisasterManager
-import horizons.world.worldutils # keep like this to make origin visible
+from horizons.world import worldutils
 
 class World(BuildingOwner, WorldObject):
 	"""The World class represents an Unknown Horizons map with all its units, grounds, buildings, etc.
@@ -320,7 +313,7 @@ class World(BuildingOwner, WorldObject):
 			if len(ai_data) > 0:
 				class_package, class_name = ai_data[0]
 				# import ai class and call load on it
-				module = __import__('horizons.ai.'+class_package, fromlist=[class_name])
+				module = __import__('horizons.ai.'+class_package, fromlist=[str(class_name)])
 				ai_class = getattr(module, class_name)
 				player = ai_class.load(self.session, savegame_db, player_worldid)
 			else: # no ai
@@ -378,8 +371,8 @@ class World(BuildingOwner, WorldObject):
 			n += 1
 
 	def init_fish_indexer(self):
-		radius = Entities.buildings[ BUILDINGS.FISHERMAN_CLASS ].radius
-		buildings = self.provider_buildings.provider_by_resources[RES.FISH_ID]
+		radius = Entities.buildings[ BUILDINGS.FISHER ].radius
+		buildings = self.provider_buildings.provider_by_resources[RES.FISH]
 		self.fish_indexer = BuildingIndexer(radius, self.full_map, buildings=buildings)
 
 	def init_new_world(self, trader_enabled, pirate_enabled, natural_resource_multiplier):
@@ -422,7 +415,7 @@ class World(BuildingOwner, WorldObject):
 			point = self.get_random_possible_ship_position()
 			# Execute command directly, not via manager, because else it would be transmitted over the
 			# network to other players. Those however will do the same thing anyways.
-			ship = CreateUnit(player.worldid, UNITS.PLAYER_SHIP_CLASS, point.x, point.y)(issuer=self.session.world.player)
+			ship = CreateUnit(player.worldid, UNITS.PLAYER_SHIP, point.x, point.y)(issuer=self.session.world.player)
 			# give ship basic resources
 			for res, amount in self.session.db("SELECT resource, amount FROM start_resources"):
 				ship.get_component(StorageComponent).inventory.alter(res, amount)
@@ -544,13 +537,13 @@ class World(BuildingOwner, WorldObject):
 				break
 		return islands
 
-	def get_warehouses(self, position=None, radius=None, owner=None, include_allied=False):
+	def get_warehouses(self, position=None, radius=None, owner=None, include_tradeable=False):
 		"""Returns all warehouses on the map. Optionally only those in range
 		around the specified position.
 		@param position: Point or Rect instance.
 		@param radius: int radius to use.
 		@param owner: Player instance, list only warehouses belonging to this player.
-		@param include_allied also list the warehouses belonging to allies
+		@param include_tradeable also list the warehouses the owner can trade with
 		@return: List of warehouses.
 		"""
 		warehouses = []
@@ -566,7 +559,7 @@ class World(BuildingOwner, WorldObject):
 				if (radius is None or position is None or \
 				    warehouse.position.distance(position) <= radius) and \
 				   (owner is None or warehouse.owner == owner or
-				    (include_allied and self.diplomacy.are_allies(warehouse.owner, owner))):
+				    (include_tradeable and self.diplomacy.can_trade(warehouse.owner, owner))):
 					warehouses.append(warehouse)
 		return warehouses
 

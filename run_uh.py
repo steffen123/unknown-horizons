@@ -46,7 +46,6 @@ import optparse
 import signal
 import traceback
 import platform
-import struct
 
 # NOTE: do NOT import anything from horizons.* into global scope
 # this will break any run_uh imports from other locations (e.g. _get_version())
@@ -67,7 +66,8 @@ def show_error_message(title, message):
 	exit(1)
 
 if __name__ == '__main__':
-	if platform.python_version_tuple()[0] != '2':
+    	# python up to version 2.6.1 returns an int. http://bugs.python.org/issue5561
+	if platform.python_version_tuple()[0] not in (2,'2'):
 		show_error_message('Unsupported Python version', 'Python 2 is required to run Unknown Horizons.')
 
 def log():
@@ -300,7 +300,7 @@ def setup_debugging(options):
 			print('No such logger: %s' % module)
 			sys.exit(1)
 		logging.getLogger(module).setLevel(logging.DEBUG)
-	if options.debug or len(options.debug_module) > 0 or options.debug_log_only:
+	if options.debug or options.debug_module or options.debug_log_only:
 		options.debug = True
 		# also log to file
 		# init a logfile handler with a dynamic filename
@@ -325,11 +325,7 @@ def setup_debugging(options):
 			def write(self, line):
 				line = unicode(line)
 				sys.__stdout__.write(line)
-				try:
-					logfile.write(line)
-				except UnicodeEncodeError:
-					# python unicode handling is weird, this has been empirically proven to work
-					logfile.write( line.encode("UTF-8") )
+				logfile.write(line.encode('UTF-8'))
 			def flush(self):
 				sys.__stdout__.flush()
 				logfile.flush()
@@ -530,8 +526,8 @@ def standalone_error_popup(headline, msg):
 
 	dlg = pychan.loadXML("content/gui/xml/startup_error_popup.xml")
 	# can't translate as translations are only set up later
-	dlg.findChild(name="headline").text = unicode(headline)
-	dlg.findChild(name="msg").text = unicode(msg)
+	dlg.findChild(name="headline").text = headline
+	dlg.findChild(name="msg").text = msg
 	dlg.mapEvents({'quit_button': do_quit})
 	dlg.show()
 

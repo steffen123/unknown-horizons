@@ -21,8 +21,8 @@
 # ###################################################
 
 from horizons.gui.tabs import OverviewTab
-from horizons.world.component.storagecomponent import StorageComponent
-from horizons.world.component.selectablecomponent import SelectableComponent
+from horizons.component.storagecomponent import StorageComponent
+from horizons.component.selectablecomponent import SelectableComponent
 
 class GroundUnitOverviewTab(OverviewTab):
 	has_stance = True

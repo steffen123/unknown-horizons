@@ -25,24 +25,28 @@ import subprocess
 import sys
 import tempfile
 import os
+import re
+import locale
 
 import horizons.main
 
-from horizons.util import Callback, random_map
+from horizons.util import Callback, random_map, yamlcache
 from horizons.extscheduler import ExtScheduler
 from horizons.savegamemanager import SavegameManager
 from horizons.gui.modules import AIDataSelection, PlayerDataSelection
-from horizons.constants import AI
+from horizons.constants import AI, LANGUAGENAMES
+from horizons.gui.widgets import OkButton
 from horizons.gui.widgets.minimap import Minimap
 from horizons.world import World
 from horizons.util import SavegameAccessor, WorldObject, Rect
+from horizons.i18n import find_available_languages
 
 class SingleplayerMenu(object):
 
 	# game options
 	resource_densities = [0.5, 0.7, 1, 1.4, 2]
 
-	def show_single(self, show = 'scenario'): # tutorial
+	def show_single(self, show='scenario'): # show scenarios to highlight tutorials
 		"""
 		@param show: string, which type of games to show
 		"""
@@ -100,6 +104,7 @@ class SingleplayerMenu(object):
 			self._setup_random_map_selection(right_side)
 			self._setup_game_settings_selection()
 			self._on_random_map_parameter_changed()
+			self.active_right_side.findChild(name="open_random_map_archive").capture(self._open_random_map_archive)
 		elif show == 'free_maps':
 			self.current.files, maps_display = SavegameManager.get_maps()
 
@@ -116,15 +121,12 @@ class SingleplayerMenu(object):
 				_update_infos()
 			# update preview whenever something is selected in the list
 			self.active_right_side.findChild(name="maplist").mapEvents({
-			  'maplist/action'              : _update_infos,
-			  'maplist/mouseWheelMovedUp'   : _update_infos,
-			  'maplist/mouseWheelMovedDown' : _update_infos
+			  'maplist/action'              : _update_infos
 			})
 			self.active_right_side.findChild(name="maplist").capture(_update_infos, event_name="keyPressed")
 			show_ai_options = True
 			self._setup_game_settings_selection()
 		else:
-			choosable_locales = ['en', horizons.main.fife.get_locale()]
 			if show == 'campaign':
 				self.current.files, maps_display = SavegameManager.get_campaigns()
 				# tell people that we don't have any content
@@ -133,11 +135,28 @@ class SingleplayerMenu(object):
 					u"please contact us via our website (http://www.unknown-horizons.org)!"
 				self.show_popup("No campaigns available yet", text)
 			elif show == 'scenario':
-				self.current.files, maps_display = SavegameManager.get_available_scenarios(locales = choosable_locales)
+				self.current.files, maps_display = SavegameManager.get_available_scenarios()
 				# get the map files and their display names. display tutorials on top.
 				prefer_tutorial = lambda x : ('tutorial' not in x, x)
 				maps_display.sort(key=prefer_tutorial)
 				self.current.files.sort(key=prefer_tutorial)
+				#add all locales to lang list, select current locale as default and sort
+				lang_list = self.current.findChild(name="uni_langlist")
+				self.active_right_side.distributeInitialData({ 'maplist' : maps_display, })
+				# select first entry
+				self.active_right_side.distributeData({ 'maplist' : 0, })
+				selectable_languages = []
+				#show only selectable languages
+				for i in find_available_languages().keys():
+					if os.path.exists(self._get_selected_map() + '_' + i + '.' + SavegameManager.scenario_extension):
+						selectable_languages.append(LANGUAGENAMES[i])
+				selectable_languages.sort()
+				lang_list.items = selectable_languages
+				cur_locale = horizons.main.fife.get_locale()
+				if LANGUAGENAMES[cur_locale] in lang_list.items:
+					lang_list.selected = lang_list.items.index(LANGUAGENAMES[cur_locale])
+				else:
+					lang_list.selected = 0
 
 			self.active_right_side.distributeInitialData({ 'maplist' : maps_display, })
 			if len(maps_display) > 0:
@@ -148,6 +167,106 @@ class SingleplayerMenu(object):
 					from horizons.scenario import ScenarioEventHandler, InvalidScenarioFileFormat
 					def _update_infos():
 						"""Fill in infos of selected scenario to label"""
+						def _find_map_filename(locale=None):
+							"""Finds the selected map's filename with its locale."""
+							this_locale = ""
+							new_map_name = ""
+							if locale is None:
+								this_locale = LANGUAGENAMES.get_by_value(lang_list.selected_item)
+							else:
+								this_locale = locale
+							#check if selected map's file ends with .yaml
+							if self._get_selected_map().find('.yaml') == -1:
+								new_map_name = self._get_selected_map() + '_' + \
+									       this_locale + '.' + \
+									       SavegameManager.scenario_extension
+							#if selected map's file ends with .yaml then get current locale
+							#to remove locale postfix from selected_map's name
+							else:
+								#get current locale to split current map file name
+								current_locale = yamlcache.YamlCache.get_file(self._get_selected_map(), \
+													       game_data=True)['locale']
+								new_map_name = self._get_selected_map()[:self._get_selected_map().\
+									       find('_' + current_locale)] + '_' + \
+									       this_locale + '.' + \
+									       SavegameManager.scenario_extension
+
+							return new_map_name
+
+						cur_selected_language = lang_list.selected_item
+						selectable_languages = []
+						#show only selectable languages
+						for i in find_available_languages().keys():
+							if os.path.exists(_find_map_filename(i)):
+								selectable_languages.append(LANGUAGENAMES[i])
+						selectable_languages.sort()
+						lang_list.items = selectable_languages
+						if cur_selected_language in lang_list.items:
+							lang_list.selected = lang_list.items.index(cur_selected_language)
+						else:
+							lang_list.selected = 0
+
+						def _update_translation_infos(new_map_name):
+							"""Fill in translation infos of selected scenario to translation label.
+
+							It gets translation_status from new_map_file. If there is no attribute
+							like translation_status then selected locale is the original locale of
+							the selected scenario. In this case, hide translation_status_label.
+
+							If there are fuzzy translations, show them as untranslated.
+
+							This function also sets scenario map name using locale.
+						(e.g. tutorial -> tutorial_en.yaml)"""
+
+							translation_status_label = self.current.findChild(name="translation_status")
+							try:
+								#get translation status
+								translation_status_message = yamlcache.YamlCache.get_file(new_map_name, \
+														  game_data=True)['translation_status']
+								#find integers in translation_levels string
+								translation_levels = [int(x) for x in re.findall(r'\d+', translation_status_message)]
+								#if translation_levels' len is 3 it shows us there are fuzzy ones
+								#show them as untranslated
+								if len(translation_levels) == 3:
+									translation_levels[2] += translation_levels[1]
+								#if everything is translated then set untranslated count as 0
+								if len(translation_levels) == 1:
+									translation_levels.append(0)
+								translation_status_label.text = _("Translation status:") + '\n' + \
+									_("{translated} translated messages, {untranslated} untranslated messages")\
+									.format(translated=translation_levels[0], \
+										untranslated=translation_levels[-1])
+								#if selected language is english then don't show translation status
+								translation_status_label.show()
+							#if there is no translation_status then hide it
+							except KeyError:
+								translation_status_label.hide()
+
+							self.current.files[ self.active_right_side.collectData('maplist') ] = new_map_name
+
+
+						#Add locale postfix to fix scenario file
+						try:
+							_update_translation_infos(_find_map_filename())
+						#if there is no scenario with selected locale then select system's default
+						except IOError:
+							default_locale = ""
+							_default_locale, default_encoding = locale.getdefaultlocale()
+							try:
+								default_locale = _default_locale.split('_')[0]
+							except:
+								# If default locale could not be detected use 'EN' as fallback
+								default_locale = "en"
+
+							#check if default_locale is in list
+							if LANGUAGENAMES[default_locale] in lang_list.items:
+								lang_list.selected = lang_list.items.index(LANGUAGENAMES[default_locale])
+							#if default locale is not in list then select first one
+							else:
+								lang_list.selected = 0
+
+							_update_infos()
+
 						try:
 							difficulty = ScenarioEventHandler.get_difficulty_from_file( self._get_selected_map() )
 							desc = ScenarioEventHandler.get_description_from_file( self._get_selected_map() )
@@ -155,12 +274,24 @@ class SingleplayerMenu(object):
 						except InvalidScenarioFileFormat as e:
 							self._show_invalid_scenario_file_popup(e)
 							return
-						self.current.findChild(name="map_difficulty").text = \
+						self.current.findChild(name="uni_map_difficulty").text = \
 							_("Difficulty: {difficulty}").format(difficulty=difficulty) #xgettext:python-format
-						self.current.findChild(name="map_author").text = \
+						self.current.findChild(name="uni_map_author").text = \
 							_("Author: {author}").format(author=author) #xgettext:python-format
-						self.current.findChild(name="map_desc").text = \
+						self.current.findChild(name="uni_map_desc").text = \
 							_("Description: {desc}").format(desc=desc) #xgettext:python-format
+
+					self.active_right_side.findChild(name="uni_langlist").mapEvents({
+						'uni_langlist/action': _update_infos
+					})
+					self.active_right_side.findChild(name="uni_langlist").capture(_update_infos, event_name="keyPressed")
+					_update_infos()
+					#hide and show current window to keep bugs away from us
+					#if we don't do this, translation_label doesn't hide even if
+					#selected language is english or doesn't show if selected
+					#language has translation_status attribute
+					self.current.hide()
+					self.current.show()
 				elif show == 'campaign': # update infos for campaign
 					def _update_infos():
 						"""Fill in infos of selected campaign to label"""
@@ -177,9 +308,7 @@ class SingleplayerMenu(object):
 
 
 				self.active_right_side.findChild(name="maplist").mapEvents({
-					'maplist/action': _update_infos,
-					'maplist/mouseWheelMovedUp'   : _update_infos,
-					'maplist/mouseWheelMovedDown' : _update_infos
+					'maplist/action': _update_infos
 				})
 				self.active_right_side.findChild(name="maplist").capture(_update_infos, event_name="keyPressed")
 				_update_infos()
@@ -222,17 +351,17 @@ class SingleplayerMenu(object):
 				horizons.main.start_singleplayer(map_file, playername, playercolor, is_scenario=is_scenario)
 			except InvalidScenarioFileFormat as e:
 				self._show_invalid_scenario_file_popup(e)
-				self._select_single(show = 'scenario')
+				self._select_single(show='scenario')
 		elif is_campaign:
-			campaign_info = SavegameManager.get_campaign_info(filename = map_file)
+			campaign_info = SavegameManager.get_campaign_info(filename=map_file)
 			if not campaign_info:
 				self._show_invalid_scenario_file_popup("Unknown Error")
-				self._select_single(show = 'campaign')
+				self._select_single(show='campaign')
 			scenario = campaign_info.get('scenarios')[0].get('level')
 			map_file = campaign_info.get('scenario_files').get(scenario)
 			# TODO : why this does not work ?
 			#
-			#	horizons.main.start_singleplayer(map_file, playername, playercolor, is_scenario = True, campaign = {
+			#	horizons.main.start_singleplayer(map_file, playername, playercolor, is_scenario=True, campaign={
 			#		'campaign_name': campaign_info.get('codename'), 'scenario_index': 0, 'scenario_name': scenario
 			#		})
 			#
@@ -242,9 +371,9 @@ class SingleplayerMenu(object):
 		else: # free play/random map
 			horizons.main.start_singleplayer(
 			  map_file, playername, playercolor, ai_players = ai_players, human_ai = AI.HUMAN_AI,
-			  trader_enabled = self.widgets['game_settings'].findChild(name = 'free_trader').marked,
-			  pirate_enabled = self.widgets['game_settings'].findChild(name = 'pirates').marked,
-			  disasters_enabled = self.widgets['game_settings'].findChild(name = 'disasters').marked,
+			  trader_enabled = self.widgets['game_settings'].findChild(name='free_trader').marked,
+			  pirate_enabled = self.widgets['game_settings'].findChild(name='pirates').marked,
+			  disasters_enabled = self.widgets['game_settings'].findChild(name='disasters').marked,
 			  natural_resource_multiplier = self._get_natural_resource_multiplier()
 			)
 
@@ -257,7 +386,7 @@ class SingleplayerMenu(object):
 	island_size_deviations = [5, 10, 20, 30, 40]
 
 	def _generate_random_seed(self):
-		rand = random.Random(self.current.findChild(name = 'seed_string_field').text)
+		rand = random.Random(self.current.findChild(name='seed_string_field').text)
 		if rand.randint(0, 1) == 0:
 			# generate a random string of 1-5 letters a-z with a dash if there are 4 or more letters
 			seq = ''
@@ -282,13 +411,13 @@ class SingleplayerMenu(object):
 				return unicode('-'.join(parts))
 
 	def _setup_random_map_selection(self, widget):
-		seed_string_field = widget.findChild(name = 'seed_string_field')
+		seed_string_field = widget.findChild(name='seed_string_field')
 		seed_string_field.capture(self._on_random_map_parameter_changed)
 		seed_string_field.text = self._generate_random_seed()
 
-		map_size_slider = widget.findChild(name = 'map_size_slider')
+		map_size_slider = widget.findChild(name='map_size_slider')
 		def on_map_size_slider_change():
-			widget.findChild(name = 'map_size_lbl').text = _('Map size:') + u' ' + \
+			widget.findChild(name='map_size_lbl').text = _('Map size:') + u' ' + \
 				unicode(self.map_sizes[int(map_size_slider.value)])
 			horizons.main.fife.set_uh_setting("RandomMapSize", map_size_slider.value)
 			horizons.main.fife.save_settings()
@@ -296,9 +425,9 @@ class SingleplayerMenu(object):
 		map_size_slider.capture(on_map_size_slider_change)
 		map_size_slider.value = horizons.main.fife.get_uh_setting("RandomMapSize")
 
-		water_percent_slider = widget.findChild(name = 'water_percent_slider')
+		water_percent_slider = widget.findChild(name='water_percent_slider')
 		def on_water_percent_slider_change():
-			widget.findChild(name = 'water_percent_lbl').text = _('Water:') + u' ' + \
+			widget.findChild(name='water_percent_lbl').text = _('Water:') + u' ' + \
 				unicode(self.water_percents[int(water_percent_slider.value)]) + u'%'
 			horizons.main.fife.set_uh_setting("RandomMapWaterPercent", water_percent_slider.value)
 			horizons.main.fife.save_settings()
@@ -306,9 +435,9 @@ class SingleplayerMenu(object):
 		water_percent_slider.capture(on_water_percent_slider_change)
 		water_percent_slider.value = horizons.main.fife.get_uh_setting("RandomMapWaterPercent")
 
-		max_island_size_slider = widget.findChild(name = 'max_island_size_slider')
+		max_island_size_slider = widget.findChild(name='max_island_size_slider')
 		def on_max_island_size_slider_change():
-			widget.findChild(name = 'max_island_size_lbl').text = _('Max island size:') + u' ' + \
+			widget.findChild(name='max_island_size_lbl').text = _('Max island size:') + u' ' + \
 				unicode(self.island_sizes[int(max_island_size_slider.value)])
 			horizons.main.fife.set_uh_setting("RandomMapMaxIslandSize", max_island_size_slider.value)
 			horizons.main.fife.save_settings()
@@ -316,9 +445,9 @@ class SingleplayerMenu(object):
 		max_island_size_slider.capture(on_max_island_size_slider_change)
 		max_island_size_slider.value = horizons.main.fife.get_uh_setting("RandomMapMaxIslandSize")
 
-		preferred_island_size_slider = widget.findChild(name = 'preferred_island_size_slider')
+		preferred_island_size_slider = widget.findChild(name='preferred_island_size_slider')
 		def on_preferred_island_size_slider_change():
-			widget.findChild(name = 'preferred_island_size_lbl').text = _('Preferred island size:') + u' ' + \
+			widget.findChild(name='preferred_island_size_lbl').text = _('Preferred island size:') + u' ' + \
 				unicode(self.island_sizes[int(preferred_island_size_slider.value)])
 			horizons.main.fife.set_uh_setting("RandomMapPreferredIslandSize", preferred_island_size_slider.value)
 			horizons.main.fife.save_settings()
@@ -326,9 +455,9 @@ class SingleplayerMenu(object):
 		preferred_island_size_slider.capture(on_preferred_island_size_slider_change)
 		preferred_island_size_slider.value = horizons.main.fife.get_uh_setting("RandomMapPreferredIslandSize")
 
-		island_size_deviation_slider = widget.findChild(name = 'island_size_deviation_slider')
+		island_size_deviation_slider = widget.findChild(name='island_size_deviation_slider')
 		def on_island_size_deviation_slider_change():
-			widget.findChild(name = 'island_size_deviation_lbl').text = _('Island size deviation:') + u' ' + \
+			widget.findChild(name='island_size_deviation_lbl').text = _('Island size deviation:') + u' ' + \
 				unicode(self.island_size_deviations[int(island_size_deviation_slider.value)])
 			horizons.main.fife.set_uh_setting("RandomMapIslandSizeDeviation", island_size_deviation_slider.value)
 			horizons.main.fife.save_settings()
@@ -343,31 +472,31 @@ class SingleplayerMenu(object):
 		on_island_size_deviation_slider_change()
 
 	def _get_random_map_parameters(self):
-		seed_string = self.current.findChild(name = 'seed_string_field').text
-		map_size = self.map_sizes[int(self.current.findChild(name = 'map_size_slider').value)]
-		water_percent = self.water_percents[int(self.current.findChild(name = 'water_percent_slider').value)]
-		max_island_size = self.island_sizes[int(self.current.findChild(name = 'max_island_size_slider').value)]
-		preferred_island_size = self.island_sizes[int(self.current.findChild(name = 'preferred_island_size_slider').value)]
-		island_size_deviation = self.island_size_deviations[int(self.current.findChild(name = 'island_size_deviation_slider').value)]
+		seed_string = self.current.findChild(name='seed_string_field').text
+		map_size = self.map_sizes[int(self.current.findChild(name='map_size_slider').value)]
+		water_percent = self.water_percents[int(self.current.findChild(name='water_percent_slider').value)]
+		max_island_size = self.island_sizes[int(self.current.findChild(name='max_island_size_slider').value)]
+		preferred_island_size = self.island_sizes[int(self.current.findChild(name='preferred_island_size_slider').value)]
+		island_size_deviation = self.island_size_deviations[int(self.current.findChild(name='island_size_deviation_slider').value)]
 		return (seed_string, map_size, water_percent, max_island_size, preferred_island_size, island_size_deviation)
 
 	def _setup_game_settings_selection(self):
 		widget = self.widgets['game_settings']
 		if widget.parent is not None:
 			widget.parent.removeChild(widget)
-		settings_box = self.current.findChild(name = 'game_settings_box')
+		settings_box = self.current.findChild(name='game_settings_box')
 		settings_box.addChild(widget)
 
 		# make click on labels change the respective checkboxes
 		for setting in u'free_trader', u'pirates', u'disasters':
 			def toggle(setting):
-				box = self.current.findChild(name = setting)
+				box = self.current.findChild(name=setting)
 				box.marked = not box.marked
-			self.current.findChild(name = u'lbl_'+setting).capture(Callback(toggle, setting))
+			self.current.findChild(name=u'lbl_'+setting).capture(Callback(toggle, setting))
 
-		resource_density_slider = widget.findChild(name = 'resource_density_slider')
+		resource_density_slider = widget.findChild(name='resource_density_slider')
 		def on_resource_density_slider_change():
-			widget.findChild(name = 'resource_density_lbl').text = _('Resource density:') + u' ' + \
+			widget.findChild(name='resource_density_lbl').text = _('Resource density:') + u' ' + \
 				unicode(self.resource_densities[int(resource_density_slider.value)]) + u'x'
 			horizons.main.fife.set_uh_setting("MapResourceDensity", resource_density_slider.value)
 			horizons.main.fife.save_settings()
@@ -376,8 +505,17 @@ class SingleplayerMenu(object):
 
 		on_resource_density_slider_change()
 
+	def _open_random_map_archive(self):
+		popup = self.widgets['random_map_archive']
+		# ok should be triggered on enter, therefore we need to focus the button
+		# pychan will only allow it after the widgets is shown
+		#ExtScheduler().add_new_object(lambda : popup.findChild(name=OkButton.DEFAULT_NAME).requestFocus(), self, run_in=0)
+		popup.mapEvents({OkButton.DEFAULT_NAME : popup.hide})
+		popup.show()
+
+
 	def _get_natural_resource_multiplier(self):
-		return self.resource_densities[int(self.widgets['game_settings'].findChild(name = 'resource_density_slider').value)]
+		return self.resource_densities[int(self.widgets['game_settings'].findChild(name='resource_density_slider').value)]
 
 	def _get_selected_map(self):
 		"""Returns map file, that is selected in the maplist widget"""
@@ -400,9 +538,12 @@ class SingleplayerMenu(object):
 	def _on_random_map_parameter_changed(self):
 		"""Called to update the map preview"""
 		def on_click(event, drag):
-			self.current.findChild(name = 'seed_string_field').text = self._generate_random_seed()
+			self.current.findChild(name='seed_string_field').text = self._generate_random_seed()
 			self._on_random_map_parameter_changed()
-		self.map_preview.update_random_map( self._get_random_map_parameters(), on_click )
+		# the user might have changed the menu since the update and we would
+		# crash if we don't find the fields with the parameters
+		if self.current is self.widgets['singleplayermenu']:
+			self.map_preview.update_random_map( self._get_random_map_parameters(), on_click )
 
 	def _get_random_map_file(self):
 		"""Used to start game"""

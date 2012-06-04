@@ -24,7 +24,7 @@ from fife.extensions import pychan
 from fife.extensions.pychan.widgets.common import BoolAttr
 
 from horizons.gui.widgets.imagefillstatusbutton import ImageFillStatusButton
-from horizons.world.storage import TotalStorage, PositiveSizedSlotStorage
+from horizons.world.storage import TotalStorage, PositiveSizedSlotStorage, PositiveTotalNumSlotsStorage
 
 class Inventory(pychan.widgets.Container):
 	"""The inventory widget is used to display a stock of items, namely a Storage class instance.
@@ -38,6 +38,9 @@ class Inventory(pychan.widgets.Container):
 	# on the screen. this is usually not the case with single inventories, but e.g. for trading.
 	# display_legend: whether to display a string explanation about slot limits
 	ITEMS_PER_LINE = 4 # TODO: make this a xml attribute with a default value
+
+	UNUSABLE_SLOT_IMAGE = "content/gui/icons/resources/none_gray.png"
+
 	def __init__(self, uncached=False, display_legend=True, **kwargs):
 		# this inits the gui part of the inventory. @see init().
 		super(Inventory, self).__init__(**kwargs)
@@ -50,12 +53,15 @@ class Inventory(pychan.widgets.Container):
 		"""
 		@param ordinal: (min, max) Display ordinal scale with these boundaries instead of numbers. Currently implemented via ImageFillStatusButton.
 		"""
-		# this inits the logic of the inventory. @see __init__().
-		self.__inited = True
-		self.ordinal = ordinal
-		self.db = db
-		self._inventory = inventory
-		self.__icon = pychan.widgets.Icon(image="content/gui/icons/ship/civil_16.png")
+		# check if we must init everything anew
+		if not self.__inited or self._inventory is not inventory:
+			# this inits the logic of the inventory. @see __init__().
+			self.__inited = True
+			self.ordinal = ordinal
+			self.db = db
+			self._inventory = inventory
+			self._res_order = sorted(self._inventory.iterslots())
+			self.__icon = pychan.widgets.Icon(image="content/gui/icons/ship/civil_16.png")
 		self.update()
 
 	def update(self):
@@ -70,22 +76,45 @@ class Inventory(pychan.widgets.Container):
 		vbox.width = self.width
 		current_hbox = pychan.widgets.HBox(padding = 0)
 		index = 0
-		for resid, amount in sorted(self._inventory): # sort by resid for unchangeable positions
+
+		# add res to res order in case there are new ones
+		# (never remove old ones for consistent positioning)
+		new_res = sorted( resid for resid in self._inventory.iterslots() if resid not in self._res_order )
+
+		if isinstance(self._inventory, PositiveTotalNumSlotsStorage):
+			# limited number of slots. We have to switch unused slots with newly added ones on overflow
+
+			while len(self._res_order) + len(new_res) > self._inventory.slotnum:
+				for i in xrange( self._inventory.slotnum ):
+					# search empty slot
+					if self._inventory[ self._res_order[i] ] == 0:
+						# insert new res here
+						self._res_order[i] = new_res.pop(0)
+						if not new_res:
+							break # all done
+
+		# add remaining slots for slotstorage or just add it without consideration for other storage kinds
+		self._res_order += new_res
+
+		for resid in self._res_order:
 			# check if this res should be displayed
 			if not self.db.cached_query('SELECT shown_in_inventory FROM resource WHERE id = ?', resid)[0][0]:
 				continue
 
+			amount = self._inventory[resid]
+
 			if self.ordinal is not None:
 				range_ = self.ordinal[1] - self.ordinal[0]
-				filled = ( float(amount - self.ordinal[0]) / range_ ) * 100
+				filled = (100 * (amount - self.ordinal[0])) // range_
 				amount = ""
 			elif isinstance(self._inventory, TotalStorage):
 				filled = 0
 			else:
-				filled = int(float(amount) / float(self._inventory.get_limit(resid)) * 100.0)
+				filled = (100 * amount) // self._inventory.get_limit(resid)
 
 			button = ImageFillStatusButton.init_for_res(self.db, resid, amount, \
 			                                            filled=filled, uncached=self.uncached)
+			button.button.name = "inventory_entry_%s" % index # required for gui tests
 			current_hbox.addChild(button)
 
 			# old code to do this, which was bad but kept for reference
@@ -100,14 +129,27 @@ class Inventory(pychan.widgets.Container):
 				self.parent.removeChildren(icons[self.ITEMS_PER_LINE-1:])
 		vbox.addChild(current_hbox)
 		self.addChild(vbox)
+		height = ImageFillStatusButton.CELL_SIZE[1] * len(self._res_order) // self.ITEMS_PER_LINE
+		self.min_size = (self.min_size[0], height)
+
+
+		if isinstance(self._inventory, TotalStorage):
+			# if it's full, the additional slots have to be marked as unusable (#1686)
+			# check for any res, the res type doesn't matter here
+			if self._inventory.get_free_space_for(0) == 0:
+				for i in xrange(index, self.ITEMS_PER_LINE):
+					button = pychan.widgets.Icon(image=self.__class__.UNUSABLE_SLOT_IMAGE)
+					current_hbox.addChild(button)
+
+
 		if self.display_legend:
 			if isinstance(self._inventory, TotalStorage):
 				# Add total storage indicator
 				sum_stored_res = self._inventory.get_sum_of_stored_resources()
 				label = pychan.widgets.Label()
 				label.text = unicode(sum_stored_res) + u"/" + unicode(self._inventory.get_limit(None))
-				label.position = (170, 53)
-				self.__icon.position = (150, 53)
+				label.position = (150, 53)
+				self.__icon.position = (130, 53)
 				self.addChildren(label, self.__icon)
 			elif isinstance(self._inventory, PositiveSizedSlotStorage):
 				label = pychan.widgets.Label()

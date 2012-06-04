@@ -72,7 +72,7 @@ from horizons.util import Callback, WorldObject
 from horizons.ext.enum import Enum
 from horizons.ai.generic import GenericAI
 from horizons.util.python import decorators
-from horizons.world.component.selectablecomponent import SelectableComponent
+from horizons.component.selectablecomponent import SelectableComponent
 
 class AIPlayer(GenericAI):
 	"""This is the AI that builds settlements."""
@@ -319,6 +319,10 @@ class AIPlayer(GenericAI):
 	def notify_mine_empty(self, mine):
 		"""The Mine calls this function to let the player know that the mine is empty."""
 		self._settlement_manager_by_settlement_id[mine.settlement.worldid].production_builder.handle_mine_empty(mine)
+
+	def notify_new_disaster(self, message):
+		super(AIPlayer, self).notify_new_disaster(message)
+		Scheduler().add_new_object(Callback(self._settlement_manager_by_settlement_id[message.building.settlement.worldid].handle_disaster, message), self, run_in = 0)
 
 	def on_settlement_expansion(self, settlement, coords):
 		""" stores the ownership change in a list for later processing """

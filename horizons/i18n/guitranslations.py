@@ -48,6 +48,12 @@ def set_translations():
 	global text_translations
 	text_translations = {
 
+	"stringpreviewwidget.xml" : {
+		},
+
+	"buildtab.xml" : {
+		},
+
 	"buildtab_no_settlement.xml" : {
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Game start"),
@@ -69,6 +75,12 @@ def set_translations():
 	"city_info.xml" : {
 		# (helptext of widget: city_info_inhabitants)
 		("city_info_inhabitants"       , "helptext"): _("Inhabitants"),
+		},
+
+	"messagewidget_icon.xml" : {
+		},
+
+	"messagewidget_message.xml" : {
 		},
 
 	"minimap.xml" : {
@@ -96,9 +108,10 @@ def set_translations():
 		("zoomOut"                     , "helptext"): _("Zoom out"),
 		},
 
+	"resource_overview_bar_entry.xml" : {
+		},
+
 	"resource_overview_bar_gold.xml" : {
-		# (helptext of widget: background_icon)
-		("background_icon"             , "helptext"): _("Gold"),
 		},
 
 	"change_name.xml" : {
@@ -366,11 +379,28 @@ def set_translations():
 		("taxes"                       , "helptext"): _("Paid taxes"),
 		},
 
+	"overview_enemybuilding.xml" : {
+		},
+
+	"overview_enemyunit.xml" : {
+		},
+
 	"overview_enemywarehouse.xml" : {
 		# (text of widget: buying_label)
 		("buying_label"                , "text"    ): _("Buying"),
 		# (text of widget: selling_label)
 		("selling_label"               , "text"    ): _("Selling"),
+		},
+
+	"overview_firestation.xml" : {
+		# (text of widget: headline)
+		("headline"                    , "text"    ): _("Building overview"),
+		# (text of widget: name_label)
+		("name_label"                  , "text"    ): _("Name:"),
+		# (helptext of widget: running_costs_label)
+		("running_costs_label"         , "helptext"): _("Running costs"),
+		# (helptext of widget: running_costs)
+		("running_costs"               , "helptext"): _("Running costs"),
 		},
 
 	"overview_groundunit.xml" : {
@@ -468,6 +498,12 @@ def set_translations():
 		("name_label"                  , "text"    ): _("Name:"),
 		},
 
+	"overview_select_multi.xml" : {
+		},
+
+	"unit_entry_widget.xml" : {
+		},
+
 	"buy_sell_goods.xml" : {
 		# (text of widget: buying_label)
 		("buying_label"                , "text"    ): _("Buying"),
@@ -516,6 +552,9 @@ def set_translations():
 		("trade"                       , "helptext"): _("Trade"),
 		},
 
+	"tab_base.xml" : {
+		},
+
 	"buysellmenu.xml" : {
 		# (text of widget: headline)
 		("headline"                    , "text"    ): _("Buy or sell resources"),
@@ -549,6 +588,9 @@ def set_translations():
 		("show_production_overview"    , "helptext"): _("Show resources produced in this settlement"),
 		},
 
+	"trade_single_slot.xml" : {
+		},
+
 	"overview_farmproductionline.xml" : {
 		# (helptext of widget: toggle_active_active)
 		("toggle_active_active"        , "helptext"): _("Pause production"),
@@ -561,6 +603,9 @@ def set_translations():
 		("toggle_active_active"        , "helptext"): _("Pause production"),
 		# (helptext of widget: toggle_active_inactive)
 		("toggle_active_inactive"      , "helptext"): _("Start production"),
+		},
+
+	"relatedfields.xml" : {
 		},
 
 	"resbar_resource_selection.xml" : {
@@ -585,6 +630,9 @@ def set_translations():
 		("move_down"                   , "helptext"): _("Move down"),
 		# (helptext of widget: move_up) Trade route entry
 		("move_up"                     , "helptext"): _("Move up"),
+		},
+
+	"trade_history_item.xml" : {
 		},
 
 	"captains_log.xml" : {
@@ -642,6 +690,9 @@ def set_translations():
 		("start_route"                 , "helptext"): _("Start route"),
 		},
 
+	"healthwidget.xml" : {
+		},
+
 	"island_production.xml" : {
 		# (helptext of widget: okButton)
 		("okButton"                    , "helptext"): _("Close"),
@@ -666,6 +717,22 @@ def set_translations():
 		("total_score"                 , "text"    ): _("Total"),
 		# (text of widget: unit_score)
 		("unit_score"                  , "text"    ): _("Units"),
+		# (helptext of widget: building_score)
+		("building_score"              , "helptext"): _("Value of all the buildings in the player's settlement(s)"),
+		# (helptext of widget: land_score)
+		("land_score"                  , "helptext"): _("Value of usable land i.e Amount of Land that can be used to create buildings "),
+		# (helptext of widget: money_score)
+		("money_score"                 , "helptext"): _("Player's current treasury + income expected in near future"),
+		# (helptext of widget: player_name)
+		("player_name"                 , "helptext"): _("Player Name"),
+		# (helptext of widget: resource_score)
+		("resource_score"              , "helptext"): _("Value of resources generated from all the possible sources in the player's settlement(s)"),
+		# (helptext of widget: settler_score)
+		("settler_score"               , "helptext"): _("Value denoting the progress of the settlement(s) in terms of inhabitants, buildings and overall happiness"),
+		# (helptext of widget: total_score)
+		("total_score"                 , "helptext"): _("The total value from all individual entities or in short : Total Player Score"),
+		# (helptext of widget: unit_score)
+		("unit_score"                  , "helptext"): _("Value of all the units owned by the player"),
 		},
 
 	"players_settlements.xml" : {
@@ -703,6 +770,27 @@ def set_translations():
 		("hold_ground_stance"          , "helptext"): _("Hold ground"),
 		# (helptext of widget: none_stance) Description of combat stance (how units behave when fighting)
 		("none_stance"                 , "helptext"): _("Passive"),
+		},
+
+	"tooltip.xml" : {
+		},
+
+	"call_for_support.xml" : {
+		},
+
+	"credits0.xml" : {
+		},
+
+	"credits1.xml" : {
+		},
+
+	"credits2.xml" : {
+		},
+
+	"credits3.xml" : {
+		},
+
+	"credits4.xml" : {
 		},
 
 	"help.xml" : {
@@ -959,6 +1047,11 @@ def set_translations():
 		("use_renderer_label"          , "helptext"): _("SDL is only meant as unsupported fallback and might cause problems!"),
 		},
 
+	"random_map_archive.xml" : {
+		# (text of widget: headline)
+		("headline"                    , "text"    ): _("Random map archive"),
+		},
+
 	"select_savegame.xml" : {
 		# (text of widget: enter_filename_label)
 		("enter_filename_label"        , "text"    ): _("Enter filename:"),
@@ -1040,5 +1133,17 @@ def set_translations():
 		("color_label"                 , "text"    ): _("Color:"),
 		# (text of widget: player_label)
 		("player_label"                , "text"    ): _("Player name:"),
+		},
+
+	"popup_230.xml" : {
+		},
+
+	"popup_290.xml" : {
+		},
+
+	"popup_350.xml" : {
+		},
+
+	"startup_error_popup.xml" : {
 		},
 	}

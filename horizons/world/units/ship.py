@@ -24,15 +24,15 @@ from fife import fife
 
 import horizons.main
 
-from horizons.world.pathfinding.pather import ShipPather, FisherShipPather
-from horizons.world.pathfinding import PathBlockedError
+from horizons.util.pathfinding.pather import ShipPather, FisherShipPather
+from horizons.util.pathfinding import PathBlockedError
 from horizons.world.units.collectors import FisherShipCollector
 from unit import Unit
 from horizons.constants import LAYERS
 from horizons.scheduler import Scheduler
-from horizons.world.component.namedcomponent import ShipNameComponent, NamedComponent
-from horizons.world.component.selectablecomponent import SelectableComponent
-from horizons.world.component.commandablecomponent import CommandableComponent
+from horizons.component.namedcomponent import ShipNameComponent, NamedComponent
+from horizons.component.selectablecomponent import SelectableComponent
+from horizons.component.commandablecomponent import CommandableComponent
 from horizons.world.traderoute import TradeRoute
 
 class Ship(Unit):
@@ -106,6 +106,15 @@ class Ship(Unit):
 			self.session.world.ship_map[self.position.to_tuple()] = weakref.ref(self)
 			self.session.world.ship_map[self._next_target.to_tuple()] = weakref.ref(self)
 
+	def _movement_finished(self):
+		if self.in_ship_map:
+			# if the movement somehow stops, the position sticks, and the unit isn't at next_target any more
+			if self._next_target is not None:
+				ship = self.session.world.ship_map.get(self._next_target.to_tuple())
+				if ship is not None and ship() is self:
+					del self.session.world.ship_map[self._next_target.to_tuple()]
+		super(Ship, self)._movement_finished()
+
 	def go(self, x, y):
 		#disable the trading route
 		if hasattr(self, 'route'):
@@ -161,8 +170,14 @@ class Ship(Unit):
 			ships.remove(self)
 		return ships
 
+	def get_tradeable_warehouses(self, position=None):
+		"""Returns warehouses this ship can trade with w.r.t. position, which defaults to the ships ones."""
+		if position is None:
+			position = self.position
+		return self.session.world.get_warehouses(position, self.radius, self.owner, include_tradeable=True)
+
 	def get_location_based_status(self, position):
-		warehouses = self.session.world.get_warehouses(position, self.radius, self.owner, True)
+		warehouses = self.get_tradeable_warehouses(position)
 		if warehouses:
 			warehouse = warehouses[0] # TODO: don't ignore the other possibilities
 			player_suffix = u''

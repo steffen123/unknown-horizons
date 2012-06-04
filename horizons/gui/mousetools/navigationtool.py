@@ -24,27 +24,45 @@ from fife import fife
 import horizons.main
 
 from horizons.gui.mousetools.cursortool import CursorTool
-from horizons.util import WorldObject
+from horizons.util import WorldObject, WeakList
 from horizons.util.lastactiveplayersettlementmanager import LastActivePlayerSettlementManager
 from horizons.constants import LAYERS
+from horizons.messaging import HoverInstancesChanged
+from horizons.messaging import MessageBus
+from horizons.extscheduler import ExtScheduler
 
 from fife.extensions.pychan.widgets import Icon
 
 class NavigationTool(CursorTool):
 	"""Navigation Class to process mouse actions ingame"""
 
-	last_event_pos = None # last received mouse event position, fife.ScreenPoint
+	last_event_pos = fife.ScreenPoint(0, 0) # last received mouse event position, fife.ScreenPoint
+
+	send_hover_instances_update = True
+	HOVER_INSTANCES_UPDATE_DELAY = 1 # sec
+	last_hover_instances = WeakList()
 
 	def __init__(self, session):
 		super(NavigationTool, self).__init__(session)
 		self._last_mmb_scroll_point = [0, 0]
-		self.lastmoved = fife.ExactModelCoordinate()
+		# coordinates of last mouse positions
+		self.last_exact_world_location = fife.ExactModelCoordinate()
+		self._hover_instances_update_scheduled = False
 		self.middle_scroll_active = False
 
 		class CmdListener(fife.ICommandListener): pass
 		self.cmdlist = CmdListener()
 		horizons.main.fife.eventmanager.addCommandListener(self.cmdlist)
 		self.cmdlist.onCommand = self.onCommand
+
+		if not self.__class__.send_hover_instances_update:
+			# clear
+			HoverInstancesChanged.broadcast(self, set())
+			self.__class__.last_hover_instances = WeakList()
+		else:
+			# need updates about scrolling here
+			self.session.view.add_change_listener(self._schedule_hover_instance_update)
+			self._schedule_hover_instance_update()
 
 		class CoordsTooltip(object):
 			@classmethod
@@ -62,7 +80,8 @@ class NavigationTool(CursorTool):
 				self.cursor_tool = cursor_tool
 				self.enabled = False
 
-				self.icon = Icon()
+				self.icon = Icon(position=(1,1)) # 0, 0 is currently not supported by tooltips
+
 
 			def toggle(self):
 				self.enabled = not self.enabled
@@ -71,14 +90,16 @@ class NavigationTool(CursorTool):
 
 			def show_evt(self, evt):
 				if self.enabled:
-					x, y = self.cursor_tool.get_world_location_from_event(evt).to_tuple()
-					self.icon.helptext = str(x) + ', ' + str(y) + " "+_("Press H to remove this hint")
+					x, y = self.cursor_tool.get_world_location(evt).to_tuple()
+					self.icon.helptext = u'%f, %f ' % (x, y) + _("Press H to remove this hint")
 					self.icon.position_tooltip(evt)
 					self.icon.show_tooltip()
 
 		self.tooltip = CoordsTooltip.get_instance(self)
 
 	def remove(self):
+		if self.__class__.send_hover_instances_update:
+			self.session.view.remove_change_listener(self._schedule_hover_instance_update)
 		horizons.main.fife.eventmanager.removeCommandListener(self.cmdlist)
 		super(NavigationTool, self).remove()
 
@@ -114,11 +135,18 @@ class NavigationTool(CursorTool):
 		self.__class__.last_event_pos = mousepoint
 
 		# Status menu update
-		current = self.get_exact_world_location_from_event(evt)
-		if abs((current.x-self.lastmoved.x)**2+(current.y-self.lastmoved.y)**2) >= 4**2: # move was far enough, 4 px
-			self.lastmoved = current
+		current = self.get_exact_world_location(evt)
+
+		distance_ge = lambda a, b, epsilon : abs((a.x-b.x)**2 + (a.y-b.y)**2) >= epsilon**2
+
+		if distance_ge(current, self.last_exact_world_location, 4): # update every 4 tiles for settlement info
+			self.last_exact_world_location = current
 			# update res bar with settlement-related info
 			LastActivePlayerSettlementManager().update(current)
+
+		# check if instance update is scheduled
+		if self.__class__.send_hover_instances_update:
+			self._schedule_hover_instance_update()
 
 		# Mouse scrolling
 		x, y = 0, 0
@@ -136,12 +164,18 @@ class NavigationTool(CursorTool):
 
 	# move up mouse wheel = zoom in
 	def mouseWheelMovedUp(self, evt):
-		self.session.view.zoom_in(True)
+		if horizons.main.fife.get_uh_setting("CursorCenteredZoom"):
+			self.session.view.zoom_in(True)
+		else:
+			self.session.view.zoom_in(False)
 		evt.consume()
 
 	# move down mouse wheel = zoom out
 	def mouseWheelMovedDown(self, evt):
-		self.session.view.zoom_out(True)
+		if horizons.main.fife.get_uh_setting("CursorCenteredZoom"):
+			self.session.view.zoom_out(True)
+		else:
+			self.session.view.zoom_out(False)
 		evt.consume()
 
 	def onCommand(self, command):
@@ -160,19 +194,19 @@ class NavigationTool(CursorTool):
 			if self.session is not None:
 				self.session.view.autoscroll(0, 0) # stop autoscroll
 
-	def get_hover_instances(self, evt, layers=None):
+	def get_hover_instances(self, where, layers=None):
 		"""
 		Utility method, returns the instances under the cursor
+		@param where: anything supporting getX/getY
 		@param layers: list of layer ids to search for. Default to OBJECTS
 		"""
 		if layers is None:
 			layers = [LAYERS.OBJECTS]
 
-
 		all_instances = []
 		for layer in layers:
 			instances = self.session.view.cam.getMatchingInstances(\
-		    fife.ScreenPoint(evt.getX(), evt.getY()), self.session.view.layers[layer], False) # False for accurate
+		    fife.ScreenPoint(where.getX(), where.getY()), self.session.view.layers[layer], False) # False for accurate
 			all_instances.extend(instances)
 
 		hover_instances = []
@@ -188,4 +222,25 @@ class NavigationTool(CursorTool):
 
 	def end(self):
 		super(NavigationTool, self).end()
+		if self._hover_instances_update_scheduled:
+			ExtScheduler().rem_all_classinst_calls(self)
 		self.helptext = None
+
+	def _schedule_hover_instance_update(self):
+		"""Hover instances have potentially changed, do an update in a timely fashion (but not right away)"""
+		if not self._hover_instances_update_scheduled:
+			self._hover_instances_update_scheduled = True
+			ExtScheduler().add_new_object(self._send_hover_instance_upate, self,
+			                              run_in=self.__class__.HOVER_INSTANCES_UPDATE_DELAY)
+
+	def _send_hover_instance_upate(self):
+		"""Broadcast update with new instances below mouse (hovered).
+		At most called in a certain interval, not after every mouse move in
+		order to prevent delays."""
+		self._hover_instances_update_scheduled = False
+		where = fife.Point(self.last_event_pos.x, self.last_event_pos.y)
+		instances = set(self.get_hover_instances(where))
+		# only send when there were actual changes
+		if instances != set(self.__class__.last_hover_instances):
+			self.__class__.last_hover_instances = WeakList(instances)
+			HoverInstancesChanged.broadcast(self, instances)
